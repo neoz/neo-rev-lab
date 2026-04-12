@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ida-mcp": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--name", "neo-rev-lab","-v", "./workspace:/workspace", "neo-rev-lab"]
+    },
+    "dotnet-mcp": {
+      "command": "docker",
+      "args": ["exec", "-i", "neo-rev-lab","/opt/dotnet-mcp/MCPPOC"]
+    }
+  }
+}
