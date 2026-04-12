@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     unzip \
+    gcc \
+    libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- Install bun ----------
@@ -77,7 +79,8 @@ WORKDIR /workspace
 RUN uv tool install ida-mcp
 
 # ---------- Activate IDA idalib for Python ----------
-RUN pip install ${IDADIR}/idalib/python/idapro-0.0.7-py3-none-any.whl
+RUN pip install ${IDADIR}/idalib/python/idapro-0.0.7-py3-none-any.whl \
+    && pip install angr
 RUN python ${IDADIR}/idalib/python/py-activate-idalib.py -d ${IDADIR}
 
 EXPOSE 8081
