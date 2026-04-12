@@ -21,7 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     unzip \
     gcc \
+    g++ \
     libc6-dev \
+    cmake \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- Install bun ----------
@@ -80,8 +83,12 @@ RUN uv tool install ida-mcp
 
 # ---------- Activate IDA idalib for Python ----------
 RUN pip install ${IDADIR}/idalib/python/idapro-0.0.7-py3-none-any.whl \
-    && pip install angr
+    && pip install angr unicorn
 RUN python ${IDADIR}/idalib/python/py-activate-idalib.py -d ${IDADIR}
+
+# ---------- Fix angr unicorn engine: libpyvex.so must be on ld path ----------
+RUN echo /usr/local/lib/python3.13/site-packages/pyvex/lib > /etc/ld.so.conf.d/pyvex.conf \
+    && ldconfig
 
 EXPOSE 8081
 
