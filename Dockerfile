@@ -31,10 +31,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash \
     && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
-# # ---------- Install Java runtime (for running .jar files) ----------
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     default-jre-headless \
-#     && rm -rf /var/lib/apt/lists/*
+# ---------- Install Java runtime (for running .jar files) ----------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
 
 # # ---------- Install .NET runtime (for running .NET apps) ----------
 # RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -62,6 +62,9 @@ RUN cd /opt/ida-pro && bun run keygen.js
 COPY tools/idasql/idasql /opt/ida-pro/idasql
 RUN chmod +x /opt/ida-pro/idasql \
     && ln -s /opt/ida-pro/idasql /usr/local/bin/idasql
+
+# ---------- Install jadx-mcp ----------
+COPY tools/jadx-mcp/jadx-mcp-server-1.0.0.jar /opt/jadx-mcp/jadx-mcp-server-1.0.0.jar
 
 # ---------- Install dotnet-mcp ----------
 COPY tools/dotnet-mcp/dotnet-mcp.tar /tmp/dotnet-mcp.tar
