@@ -2,7 +2,7 @@
 name: angr
 description: >
   Write angr Python scripts for symbolic execution, binary analysis, and constraint solving,
-  and run them in Docker (angr/angr image).
+  and run them in the neo-rev-lab Docker container (angr pre-installed).
   Use this skill whenever the user asks to solve a CTF challenge with angr, write an angr solve script,
   perform symbolic execution on a binary, find inputs that reach a target address, crack a keygen or
   license check, do automated exploit generation (AEG), analyze malware behavior with angr, reverse
@@ -19,83 +19,65 @@ This skill helps write correct, efficient angr scripts for reverse engineering, 
 
 ## Running angr Scripts in Docker
 
-angr is complex to install natively. Always run angr scripts inside the official Docker container.
+angr is pre-installed in the `neo-rev-lab` Docker container. Run angr scripts there using `docker exec`.
 
 ### Workflow
 
-1. **Write the solve script** to a file (e.g., `solve.py`) in the same directory as the target binary.
-2. **Run via Docker**, mounting the current directory. angr is installed in a virtualenv inside the container, so you must activate it:
+1. **Write the solve script** to a file (e.g., `solve.py`) in the `workspace/` directory (bind-mounted to `/workspace/` in the container).
+2. **Discover the running container** and run the script:
 
 ```bash
-docker run --rm -v "$(pwd):/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
+CONTAINER=$(docker ps --filter ancestor=neo-rev-lab --format '{{.Names}}' | head -1)
+MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" python3 /workspace/solve.py
 ```
 
-### Key Docker Options
+### Key Points
 
-| Option | Purpose |
-|--------|---------|
-| `--rm` | Remove container after execution |
-| `-v "$(pwd):/work"` | Mount current directory into container (Linux/macOS) |
-| `-w /work` | Set working directory inside container |
-| `bash -c "source /home/angr/.venv/bin/activate && python3 ..."` | Activate angr virtualenv before running |
+| Detail | Value |
+|--------|-------|
+| Container image | `neo-rev-lab` |
+| angr install location | System Python (no virtualenv activation needed) |
+| Workspace mount | Host `./workspace/` -> Container `/workspace/` |
+| Binary + script location | Place both in `workspace/` so they are accessible at `/workspace/` inside the container |
 
-### Platform-Specific Volume Mounts
-
-**Linux / macOS:**
-```bash
-docker run --rm -v "$(pwd):/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
-```
+### Platform Notes
 
 **Windows (Git Bash / MSYS2):**
-MSYS auto-converts Unix paths, breaking Docker `-w /work`. Prefix with `MSYS_NO_PATHCONV=1` and use Windows-style paths for the volume mount:
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v "D:/path/to/dir:/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
-```
+`MSYS_NO_PATHCONV=1` is required -- otherwise Unix-style paths (`/workspace/...`) get rewritten to Windows paths before reaching `docker.exe`.
 
-**Windows (PowerShell / cmd):**
-```powershell
-docker run --rm -v "${PWD}:/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
+```bash
+CONTAINER=$(docker ps --filter ancestor=neo-rev-lab --format '{{.Names}}' | head -1)
+MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" python3 /workspace/solve.py
 ```
 
 ### Examples
 
-**Basic run (Linux/macOS):**
+**Basic run:**
 ```bash
-docker run --rm -v "$(pwd):/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
-```
-
-**Basic run (Windows Git Bash):**
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v "D:/working/project:/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
-```
-
-**Interactive debugging (drop into shell):**
-```bash
-docker run --rm -it -v "$(pwd):/work" -w /work angr/angr bash
-# Then inside container:
-source /home/angr/.venv/bin/activate
-python3 solve.py
-```
-Note: Do NOT use `-it` for non-interactive (scripted) runs -- it fails in environments without a TTY (e.g., CI, some Windows terminals).
-
-**With increased memory (for large binaries):**
-```bash
-docker run --rm -m 8g -v "$(pwd):/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py"
+CONTAINER=$(docker ps --filter ancestor=neo-rev-lab --format '{{.Names}}' | head -1)
+MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" python3 /workspace/solve.py
 ```
 
 **Pass arguments to the script:**
 ```bash
-docker run --rm -v "$(pwd):/work" -w /work angr/angr bash -c "source /home/angr/.venv/bin/activate && python3 solve.py --binary ./challenge --find 0x401234"
+MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" python3 /workspace/solve.py --binary /workspace/challenge --find 0x401234
 ```
+
+**Interactive debugging (drop into shell):**
+```bash
+MSYS_NO_PATHCONV=1 docker exec -it "$CONTAINER" bash
+# Then inside container:
+cd /workspace
+python3 solve.py
+```
+Note: Do NOT use `-it` for non-interactive (scripted) runs -- it fails in environments without a TTY.
 
 ### Important Notes
 
-- **Virtualenv required**: angr is installed at `/home/angr/.venv/` inside the container, NOT in the system Python. Always activate it with `source /home/angr/.venv/bin/activate` before running scripts. Running `python3` directly will fail with `ModuleNotFoundError: No module named 'angr'`.
-- **Use `python3`, not `python`**: The container does not have a `python` binary on PATH, only `python3`.
-- The binary path in the solve script must be relative to the mounted directory (e.g., `./binary`, not an absolute host path).
-- If the binary needs specific libraries, place them in the same directory and use `ld_path=['.']` in the angr Project.
+- angr is installed in the system Python -- no virtualenv activation needed. Just run `python3` directly.
+- The binary path in the solve script must use `/workspace/` paths (e.g., `/workspace/binary`, not a host path).
+- If the binary needs specific libraries, place them in `workspace/` and use `ld_path=['/workspace/']` in the angr Project.
 - For Windows PE binaries, angr in Docker (Linux) can still analyze them -- angr handles cross-platform analysis.
-- If Docker is not available, fall back to `pip install angr` in a virtualenv, but Docker is strongly preferred.
 
 ## Quick Decision: Which Pattern Do You Need?
 
