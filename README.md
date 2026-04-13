@@ -8,20 +8,28 @@ Runs IDA Pro, JADX, .NET decompiler, and angr inside a Docker container, exposed
 
 - **Docker Desktop** -- install from https://www.docker.com/products/docker-desktop/ if not already available.
 - **Claude Code** -- install via `npm install -g @anthropic-ai/claude-code`.
-- **IDA Pro installer** -- place `ida-pro_93_x64linux.run` in `tools/ida/`.
-- **idasql binary** -- place the Linux `idasql` binary in `tools/idasql/`.
 
 ## Quick Start
 
-### 1. Build the Docker image
+### 1. Set up the workspace
 
-Open PowerShell in the project root and run:
+Run the setup script in any directory where you want to work:
 
-```powershell
-.\build.ps1
+```bash
+# Set up in the current directory
+curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/main/run.sh | bash
+
+# Or set up in a specific directory
+curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/main/run.sh | bash -s /path/to/my-project
 ```
 
-This builds the `neo-rev-lab` Docker image containing IDA Pro, idasql, JADX MCP, .NET MCP, angr, and the ida-mcp server.
+This creates the following structure:
+- `workspace/` -- drop your target binaries here (mounted at `/workspace/` in the container)
+- `.mcp.json` -- MCP server configuration pointing to `ghcr.io/neoz/neo-rev-lab:latest`
+- `CLAUDE.md` -- project instructions for Claude Code
+- `.claude/skills/` -- all reverse engineering skills (IDA, angr, etc.)
+
+The Docker image is pulled automatically on first use -- no build step required.
 
 ### 2. Place your target binary in the workspace
 
@@ -33,11 +41,9 @@ workspace/
   another_sample.apk
 ```
 
-This folder is bind-mounted into the container at `/workspace/`, so any file you place here becomes accessible to the analysis tools.
-
 ### 3. Launch Claude Code
 
-Start Claude Code from the project root:
+Start Claude Code from the project directory:
 
 ```bash
 claude
@@ -120,29 +126,15 @@ Usage example:
 
 ## Project Structure
 
+After running `run.sh`, your workspace looks like this:
+
 ```
 .
-├── .mcp.json          # MCP server configuration for Claude Code
-├── build.ps1          # Builds the neo-rev-lab Docker image
-├── debug.ps1          # Opens a shell inside the running container
-├── Dockerfile         # Container with IDA Pro, JADX, .NET MCP, angr
-├── workspace/         # Drop target binaries here (mounted at /workspace/)
-├── reports/           # Analysis reports output
-└── tools/
-    ├── ida/           # IDA Pro installer and keygen patch
-    ├── idasql/        # idasql binary (SQL interface for IDA)
-    ├── idasql-skills/ # Claude Code plugin with IDA analysis skills
-    ├── jadx-mcp/      # JADX MCP server jar
-    ├── dotnet-mcp/    # .NET decompiler MCP server
-    └── symbolic-execution-tutorial/
-```
-
-## Debugging
-
-To open an interactive shell inside the running container:
-
-```powershell
-.\debug.ps1
+├── .mcp.json          # MCP server configuration (ghcr.io/neoz/neo-rev-lab:latest)
+├── CLAUDE.md          # Project instructions for Claude Code
+├── .claude/
+│   └── skills/        # Reverse engineering skills (IDA, angr, etc.)
+└── workspace/         # Drop target binaries here (mounted at /workspace/)
 ```
 
 ## Notes
