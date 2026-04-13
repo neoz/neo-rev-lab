@@ -17,10 +17,10 @@ Run the setup script in any directory where you want to work:
 
 ```bash
 # Set up in the current directory
-curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/main/run.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.sh | bash
 
 # Or set up in a specific directory
-curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/main/run.sh | bash -s /path/to/my-project
+curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.sh | bash -s /path/to/my-project
 ```
 
 This creates the following structure:
