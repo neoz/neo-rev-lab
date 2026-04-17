@@ -7,7 +7,7 @@ Runs IDA Pro, JADX, .NET decompiler, and angr inside a Docker container, exposed
 ## Prerequisites
 
 - **Docker Desktop** -- install from https://www.docker.com/products/docker-desktop/ if not already available.
-- **Claude Code** -- install via `npm install -g @anthropic-ai/claude-code`.
+- **Claude Code** -- see the official site for installation instructions: https://claude.com/claude-code.
 
 ## Quick Start
 
