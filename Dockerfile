@@ -66,6 +66,23 @@ RUN chmod +x /opt/ida-pro/idasql \
 # ---------- Install jadx-mcp ----------
 COPY tools/jadx-mcp/jadx-mcp-server-1.0.0.jar /opt/jadx-mcp/jadx-mcp-server-1.0.0.jar
 
+# ---------- Install jadx ----------
+COPY tools/jadx/jadx.jar /opt/jadx/jadx.jar
+RUN printf '#!/bin/sh\nexec java -jar /opt/jadx/jadx.jar "$@"\n' > /usr/local/bin/jadx \
+    && chmod +x /usr/local/bin/jadx
+
+# ---------- Install apktool ----------
+COPY tools/apktool/apktool.jar /opt/apktool/apktool.jar
+RUN printf '#!/bin/sh\nexec java -jar /opt/apktool/apktool.jar "$@"\n' > /usr/local/bin/apktool \
+    && chmod +x /usr/local/bin/apktool
+
+# ---------- Install hermes-dec + hbctool (Hermes / React Native bytecode tooling) ----------
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir \
+        git+https://github.com/P1sec/hermes-dec.git \
+        git+https://github.com/bongtrop/hbctool.git
+
 # ---------- Install dotnet-mcp ----------
 COPY tools/dotnet-mcp/dotnet-mcp.tar /tmp/dotnet-mcp.tar
 RUN mkdir -p /opt/dotnet-mcp \
