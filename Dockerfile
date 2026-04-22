@@ -63,8 +63,6 @@ COPY tools/idasql/idasql /opt/ida-pro/idasql
 RUN chmod +x /opt/ida-pro/idasql \
     && ln -s /opt/ida-pro/idasql /usr/local/bin/idasql
 
-# ---------- Install jadx-mcp ----------
-COPY tools/jadx-mcp/jadx-mcp-server-1.0.0.jar /opt/jadx-mcp/jadx-mcp-server-1.0.0.jar
 
 # ---------- Install jadx ----------
 COPY tools/jadx/jadx.jar /opt/jadx/jadx.jar
