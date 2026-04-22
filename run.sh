@@ -40,10 +40,6 @@ cat > "$TARGET/.mcp.json" << MCP_EOF
     "dotnet-mcp": {
       "command": "docker",
       "args": ["exec", "-i", "neo-rev-lab", "/opt/dotnet-mcp/MCPPOC"]
-    },
-    "jadx-mcp": {
-      "command": "docker",
-      "args": ["exec", "-i", "neo-rev-lab", "java", "-Dspring.ai.mcp.server.stdio=true", "-jar", "/opt/jadx-mcp/jadx-mcp-server-1.0.0.jar"]
     }
   }
 }

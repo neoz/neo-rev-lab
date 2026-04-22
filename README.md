@@ -2,7 +2,7 @@
 
 AI-assisted reverse engineering lab powered by Claude Code and MCP (Model Context Protocol).
 
-Runs IDA Pro, JADX, .NET decompiler, and angr inside a Docker container, exposed to Claude Code as MCP tool servers so you can analyze binaries conversationally.
+Runs IDA Pro, a .NET decompiler, angr, and a full Android toolchain (jadx, apktool, hermes-dec / hbctool for React Native Hermes bytecode) inside a Docker container, exposed to Claude Code as MCP tool servers and skills so you can analyze binaries conversationally.
 
 ## Prerequisites
 
@@ -13,7 +13,9 @@ Runs IDA Pro, JADX, .NET decompiler, and angr inside a Docker container, exposed
 
 ### 1. Set up the workspace
 
-Run the setup script in any directory where you want to work:
+Run the setup script in any directory where you want to work.
+
+**Linux / macOS (bash):**
 
 ```bash
 # Set up in the current directory
@@ -22,6 +24,19 @@ curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.sh | ba
 # Or set up in a specific directory
 curl -fsSL https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.sh | bash -s /path/to/my-project
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+# Set up in the current directory
+iwr -useb https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.ps1 | iex
+
+# Or set up in a specific directory
+$script = iwr -useb https://raw.githubusercontent.com/neoz/neo-rev-lab/master/run.ps1
+& ([scriptblock]::Create($script.Content)) C:\path\to\my-project
+```
+
+> If execution policy blocks the script, run PowerShell with `-ExecutionPolicy Bypass`, or download `run.ps1` first and invoke it as `pwsh -ExecutionPolicy Bypass -File .\run.ps1`.
 
 This creates the following structure:
 - `workspace/` -- drop your target binaries here (mounted at `/workspace/` in the container)
@@ -49,15 +64,14 @@ Start Claude Code from the project directory:
 claude
 ```
 
-On first launch, Claude Code will detect the `.mcp.json` configuration and prompt you to approve the MCP servers. **Accept all three**:
+On first launch, Claude Code will detect the `.mcp.json` configuration and prompt you to approve the MCP servers. **Accept both**:
 
 | Server | Purpose |
 |---|---|
 | `ida-mcp` | IDA Pro decompiler, disassembly, xrefs, type analysis |
 | `dotnet-mcp` | .NET assembly decompilation and inspection |
-| `jadx-mcp` | Android APK/DEX decompilation |
 
-The `ida-mcp` server starts the Docker container automatically. The other two servers (`dotnet-mcp`, `jadx-mcp`) run inside the same container via `docker exec`.
+The `ida-mcp` server starts the Docker container automatically. The `dotnet-mcp` server runs inside the same container via `docker exec`.
 
 ### 4. Start reversing
 
@@ -124,6 +138,23 @@ Usage example:
 > Use angr to find the input that prints "Correct!"
 ```
 
+### Android APK Skills
+
+Android analysis runs as skills driving the CLI tools (`jadx`, `apktool`, `hermes-dec`, `hbctool`) inside the container -- no dedicated MCP server is needed. Both native Android (Java/Kotlin) and React Native (Hermes bytecode) apps are first-class.
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `/apk-find-api` | Map an APK's API surface, list endpoints, reverse-engineer an API client | Static discovery of every endpoint an APK talks to (Retrofit / OkHttp / Ktor / RN fetch), including native `.so` libs via ida-mcp |
+| `/apk-compare-versions` | Diff two versions of the same APK, audit a version bump, investigate a release regression | Full delta between two APKs: permissions, exported components, SDK flags, endpoints, hardcoded secrets, SSL pinning, native libs, and the JS bundle for RN apps |
+
+Usage examples:
+
+```
+> /apk-find-api workspace/app.apk
+> /apk-compare-versions workspace/app-v1.2.apk workspace/app-v1.3.apk
+> Diff these two builds and tell me what network endpoints changed
+```
+
 ## Project Structure
 
 After running `run.sh`, your workspace looks like this:
@@ -139,6 +170,7 @@ After running `run.sh`, your workspace looks like this:
 
 ## Notes
 
-- Only one `ida-mcp` container runs at a time. If the container is already running, Claude Code will reuse it for `dotnet-mcp` and `jadx-mcp` via `docker exec`.
+- Only one `ida-mcp` container runs at a time. If the container is already running, Claude Code will reuse it for `dotnet-mcp` and for skill-driven CLI calls (`jadx`, `apktool`, `hermes-dec`, `hbctool`, `angr`) via `docker exec`.
 - IDA databases (`.i64`) are created alongside binaries in `workspace/` and persist between sessions.
-- The `angr` Python library is pre-installed in the container for symbolic execution tasks.
+- The `angr` and `unicorn` Python libraries are pre-installed in the container for symbolic execution and emulation tasks.
+- `jadx`, `apktool`, `hermes-dec`, and `hbctool` are pre-installed on `PATH` inside the container for Android / React Native analysis.
