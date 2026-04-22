@@ -46,6 +46,14 @@ This creates the following structure:
 
 The Docker image is pulled automatically on first use -- no build step required.
 
+**Pre-pulling the image (optional).** The image is large, so the first `claude` launch can take a while as Docker fetches it in the background. To avoid the wait -- and to get a visible progress bar -- pull it ahead of time:
+
+```bash
+docker pull ghcr.io/neoz/neo-rev-lab:latest
+```
+
+The same command also updates an existing install to the latest image (new tools, bug fixes) without re-running `run.sh` / `run.ps1`. Your `workspace/`, `.mcp.json`, `CLAUDE.md`, and `.claude/skills/` are left untouched. Re-run the bootstrap script only when you want to refresh `CLAUDE.md` or pick up new skills from the repo.
+
 ### 2. Place your target binary in the workspace
 
 Copy the binary (ELF, PE, APK, .NET assembly, etc.) you want to analyze into the `workspace/` folder:
