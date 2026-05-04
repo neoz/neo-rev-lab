@@ -7,6 +7,10 @@
     "dotnet-mcp": {
       "command": "docker",
       "args": ["exec", "-i", "neo-rev-lab","/opt/dotnet-mcp/MCPPOC"]
+    },
+    "radare2-mcp": {
+      "command": "docker",
+      "args": ["exec", "-i", "neo-rev-lab", "r2mcp"]
     }
   }
 }

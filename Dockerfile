@@ -31,6 +31,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash \
     && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
+# ---------- Install CLI triage utilities (file, xxd, ripgrep) ----------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    file \
+    xxd \
+    ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
 # ---------- Install Java runtime (for running .jar files) ----------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     default-jre-headless \
@@ -74,12 +81,45 @@ COPY tools/apktool/apktool.jar /opt/apktool/apktool.jar
 RUN printf '#!/bin/sh\nexec java -jar /opt/apktool/apktool.jar "$@"\n' > /usr/local/bin/apktool \
     && chmod +x /usr/local/bin/apktool
 
+# ---------- Install CFR Java decompiler ----------
+ARG CFR_VERSION=0.152
+RUN mkdir -p /opt/cfr \
+    && curl -fsSL "https://github.com/leibnitz27/cfr/releases/download/${CFR_VERSION}/cfr-${CFR_VERSION}.jar" \
+       -o /opt/cfr/cfr.jar \
+    && printf '#!/bin/sh\nexec java -jar /opt/cfr/cfr.jar "$@"\n' > /usr/local/bin/cfr \
+    && chmod +x /usr/local/bin/cfr
+
+# ---------- Install Procyon Java decompiler ----------
+ARG PROCYON_VERSION=0.6.0
+RUN mkdir -p /opt/procyon \
+    && curl -fsSL "https://github.com/mstrobel/procyon/releases/download/v${PROCYON_VERSION}/procyon-decompiler-${PROCYON_VERSION}.jar" \
+       -o /opt/procyon/procyon.jar \
+    && printf '#!/bin/sh\nexec java -jar /opt/procyon/procyon.jar "$@"\n' > /usr/local/bin/procyon \
+    && chmod +x /usr/local/bin/procyon
+
+# ---------- Install Vineflower (maintained Fernflower successor; aliased as `fernflower`) ----------
+ARG VINEFLOWER_VERSION=1.12.0
+RUN mkdir -p /opt/vineflower \
+    && curl -fsSL "https://github.com/Vineflower/vineflower/releases/download/${VINEFLOWER_VERSION}/vineflower-${VINEFLOWER_VERSION}.jar" \
+       -o /opt/vineflower/vineflower.jar \
+    && printf '#!/bin/sh\nexec java -jar /opt/vineflower/vineflower.jar "$@"\n' > /usr/local/bin/vineflower \
+    && chmod +x /usr/local/bin/vineflower \
+    && ln -s /usr/local/bin/vineflower /usr/local/bin/fernflower
+
 # ---------- Install hermes-dec + hbctool (Hermes / React Native bytecode tooling) ----------
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir \
         git+https://github.com/P1sec/hermes-dec.git \
         git+https://github.com/bongtrop/hbctool.git
+
+# ---------- Install Radare2 + radare2-mcp ----------
+RUN apt-get update && apt-get install -y --no-install-recommends make patch \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone --depth 1 https://github.com/radareorg/radare2 /opt/radare2 \
+    && /opt/radare2/sys/install.sh \
+    && git clone --depth 1 https://github.com/radareorg/radare2-mcp /opt/radare2-mcp \
+    && cd /opt/radare2-mcp && ./configure && make && make install
 
 # ---------- Install dotnet-mcp ----------
 COPY tools/dotnet-mcp/dotnet-mcp.tar /tmp/dotnet-mcp.tar
