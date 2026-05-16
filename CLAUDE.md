@@ -36,11 +36,9 @@ Notes:
 
 ## Other reverse-engineering tools live in the same container
 
-`neo-rev-lab` ships a broader RE toolbox under `/opt/` (IDA Pro, radare2, jadx,
-apktool, Java decompilers like CFR / Procyon / Vineflower, plus the bundled
-MCP servers, etc.). Most of them have shims on `/usr/local/bin`, so the
-canonical invocation is just the tool name through `docker exec` — same shape
-as the idasql examples above:
+`neo-rev-lab` ships a broader RE toolbox. Most tools have shims on
+`/usr/local/bin`, so the canonical invocation is just the tool name through
+`docker exec` — same shape as the idasql examples above:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab r2 -A /workspace/<binary>
@@ -48,16 +46,44 @@ MSYS_NO_PATHCONV=1 docker exec neo-rev-lab jadx -d /workspace/out /workspace/<ap
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab apktool d /workspace/<app>.apk
 ```
 
-Tools without a shim (e.g. the Java decompiler `.jar`s) are run from their
-install dir:
+### Installed tool catalog (current)
+
+Authoritative list — use this instead of running `ls /opt` each session. If a
+tool looks missing in practice, the image may have evolved; verify with the
+discovery commands at the end of this section before assuming the list is
+stale.
+
+Disassembly / decompilation:
+- `idasql` — IDA Pro 9.3 SQL frontend (`/opt/ida-pro-9.3`, also at `/opt/ida-pro`)
+- `r2`, `radare2` — radare2 6.1.4 (`/usr/bin/`)
+
+Java decompilers (the four-decompiler ladder — pick per artifact):
+- `jadx` — `/opt/jadx/jadx.jar` (shim `/usr/local/bin/jadx`)
+- `cfr` — `/opt/cfr/cfr.jar` (shim `/usr/local/bin/cfr`)
+- `procyon` — `/opt/procyon/procyon.jar` (shim `/usr/local/bin/procyon`)
+- `vineflower` — `/opt/vineflower/vineflower.jar` (shim `/usr/local/bin/vineflower`, also aliased as `fernflower`)
+
+Android / mobile:
+- `apktool` — `/opt/apktool/apktool.jar` (shim `/usr/local/bin/apktool`)
+- `hbctool` — Hermes bytecode editor (pip-installed, `/usr/local/bin/hbctool`)
+- `hbc-decompiler`, `hbc-disassembler`, `hbc-file-parser` — `hermes-dec` entry points (pip-installed under `/usr/local/bin/`)
+
+Symbolic execution / scripting:
+- `angr` — Python module + `/usr/local/bin/angr` CLI; `unicorn` is also installed
+- `python3`, `uvx`, `bun`, `java` — runtimes on PATH
+
+Triage utilities (Debian packages, on PATH):
+- `file`, `xxd`, `rg` (ripgrep)
+
+Tools without a shim (e.g. the Java decompiler `.jar`s) can also be invoked
+directly from their install dir when you need flags the shim swallows:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab \
   java -jar /opt/cfr/cfr.jar /workspace/<input>.jar --outputdir /workspace/out
 ```
 
-To discover what's available — prefer this over hardcoding a tool list, since
-the image evolves:
+Re-discovery (only if the catalog above looks stale):
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab ls /opt              # installed packages

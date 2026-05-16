@@ -113,13 +113,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
         git+https://github.com/P1sec/hermes-dec.git \
         git+https://github.com/bongtrop/hbctool.git
 
-# ---------- Install Radare2 + radare2-mcp ----------
-RUN apt-get update && apt-get install -y --no-install-recommends make patch \
-    && rm -rf /var/lib/apt/lists/* \
-    && git clone --depth 1 https://github.com/radareorg/radare2 /opt/radare2 \
-    && /opt/radare2/sys/install.sh \
-    && git clone --depth 1 https://github.com/radareorg/radare2-mcp /opt/radare2-mcp \
-    && cd /opt/radare2-mcp && ./configure && make && make install
+# ---------- Install Radare2 (prebuilt .deb from radareorg) ----------
+ARG RADARE2_VERSION=6.1.4
+RUN curl -fsSL -o /tmp/radare2.deb \
+      "https://github.com/radareorg/radare2/releases/download/${RADARE2_VERSION}/radare2_${RADARE2_VERSION}_amd64.deb" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends /tmp/radare2.deb \
+    && rm /tmp/radare2.deb \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---------- Install dotnet-mcp ----------
 COPY tools/dotnet-mcp/dotnet-mcp.tar /tmp/dotnet-mcp.tar
