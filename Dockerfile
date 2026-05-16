@@ -137,7 +137,8 @@ RUN curl -LsSf https://hcli.docs.hex-rays.com/install | sh \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /workspace
-RUN uv tool install ida-mcp
+#RUN uv tool install ida-mcp # deprecated
+RUN uv tool install re-mcp-ida # re-mcp-ida is the new name for the IDA MCP UV tool; it provides the same functionality but with a more consistent naming scheme across our MCP tools
 
 # ---------- Activate IDA idalib for Python ----------
 RUN pip install ${IDADIR}/idalib/python/idapro-0.0.7-py3-none-any.whl \
@@ -150,4 +151,4 @@ RUN echo /usr/local/lib/python3.13/site-packages/pyvex/lib > /etc/ld.so.conf.d/p
 
 EXPOSE 8081
 
-CMD ["uvx", "ida-mcp"]
+CMD ["uvx", "re-mcp-ida"]
