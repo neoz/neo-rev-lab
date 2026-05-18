@@ -122,12 +122,14 @@ RUN curl -fsSL -o /tmp/radare2.deb \
     && rm /tmp/radare2.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------- Install dotnet-mcp ----------
-COPY tools/dotnet-mcp/dotnet-mcp.tar /tmp/dotnet-mcp.tar
-RUN mkdir -p /opt/dotnet-mcp \
-    && tar -xf /tmp/dotnet-mcp.tar -C /opt/dotnet-mcp \
-    && chmod +x /opt/dotnet-mcp/MCPPOC \
-    && rm /tmp/dotnet-mcp.tar
+# ---------- Install re-dotnet ----------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libicu76 \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+COPY tools/re-dotnet/re-dotnet /opt/re-dotnet/re-dotnet
+RUN chmod +x /opt/re-dotnet/re-dotnet \
+    && ln -s /opt/re-dotnet/re-dotnet /usr/local/bin/re-dotnet
 
 # ---------- Install hcli + accept EULA ----------
 RUN curl -LsSf https://hcli.docs.hex-rays.com/install | sh \
