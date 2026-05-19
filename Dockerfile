@@ -8,6 +8,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/root/.local/bin:/usr/share/dotnet:$PATH \
     TVHEADLESS=1
 
+LABEL org.opencontainers.image.title="neo-rev-lab" \
+      org.opencontainers.image.description="AI-assisted reverse engineering lab powered by Claude Code and MCP (Model Context Protocol). Runs IDA Pro, a .NET decompiler, angr, and a full Android toolchain (jadx, apktool, hermes-dec / hbctool for React Native Hermes bytecode) inside a Docker container, exposed to Claude Code as MCP tool servers and skills so you can analyze binaries conversationally." \
+      org.opencontainers.image.source="https://github.com/neoz/neo-rev-lab" \
+      org.opencontainers.image.licenses="MIT"
+
 # Runtime deps for IDA Pro (Qt libs, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
