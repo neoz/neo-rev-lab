@@ -70,7 +70,11 @@ Android / mobile:
 
 Symbolic execution / scripting:
 - `angr` — Python module + `/usr/local/bin/angr` CLI; `unicorn` is also installed
+- `r2pipe` — Python bindings for radare2 (use from any in-container script)
 - `python3`, `uvx`, `bun`, `java` — runtimes on PATH
+
+Project reversing scripts (under `/opt/scripts`, shim on PATH):
+- `delphi-reverser` — `/opt/scripts/delphi_reverser.py` (shim `/usr/local/bin/delphi-reverser`)
 
 Triage utilities (Debian packages, on PATH):
 - `file`, `xxd`, `rg` (ripgrep)
@@ -98,3 +102,58 @@ Conventions to keep in mind:
   container and disappears on rebuild.
 - For interactive sessions (e.g. `r2` REPL) add `-it`:
   `MSYS_NO_PATHCONV=1 docker exec -it neo-rev-lab r2 /workspace/<binary>`.
+
+## `delphi-reverser` — Delphi PE structural analyzer
+
+`delphi-reverser` is a project-local Python script (source at
+`tools/scripts/delphi_reverser.py`, baked into the image at
+`/opt/scripts/delphi_reverser.py`) that wraps `r2pipe` to recover Delphi-
+specific structure from any Win32 / Win64 binary built with Embarcadero /
+Borland RAD Studio (verified Delphi 2010 through Delphi 12 / Athens).
+
+Capabilities:
+- Auto-detects bitness and confirms Delphi via the compiler string or
+  `dbk_fcall_wrapper` export.
+- Scans `.data` / `.rdata` / `.text` for VMT self-pointer signatures and
+  recovers per-class `ClassName`, `Parent`, `InstanceSize`, `TypeInfo`,
+  `FieldTable`, `MethodTable`, `IntfTable`, plus published method
+  `(name, address)` pairs. Probes both the classic 22-slot and modern
+  25-slot VMT header layouts.
+- Dumps Delphi long-string constants (UnicodeString @ codepage 1200,
+  AnsiString @ 1252 / 0 / 65001) by matching the `-1` ref-count + length
+  header that precedes string literals.
+- Enumerates RCDATA resources into `DVCLAL`, `PACKAGEINFO`, `TFORM`,
+  `OTHER_RCDATA` buckets; can dump each `TPF0`-magic DFM stream verbatim.
+- Heuristic xref hunt for license / serial / trial code paths.
+
+Invocation (always inside the container, binary in `/workspace/`):
+
+```bash
+MSYS_NO_PATHCONV=1 docker exec neo-rev-lab \
+  delphi-reverser /workspace/<binary>.exe --out /workspace/<outdir>
+```
+
+Actions (default `info classes strings resources`; `all` runs everything):
+
+    info  classes  methods  strings  forms  resources  licenses  all
+
+Useful flags:
+- `--out DIR` — output dir (defaults to `./delphi_out` relative to cwd; use
+  a `/workspace/...` path so artifacts survive on the host)
+- `--limit N` — cap on dumped DFM forms (default 100)
+- `--no-analysis` — skip the r2 `aa` pass (much faster, but `licenses`
+  xref data will be empty)
+- `--quiet` — suppress r2's chatter
+
+Output layout under `--out`:
+- `info.txt`, `classes.txt`, `methods.txt`, `strings.txt`, `resources.txt`
+- `forms/<TFormName>.dfm` — raw DFM bytes (run a DFM parser separately to
+  decode; the script intentionally does not)
+- `licenses.json` — list of `{addr, text, keywords, xrefs[]}` hits
+
+Implementation notes worth remembering:
+- One r2 session is held open for the whole run, so `aa` is paid once.
+- Bulk reads use `p8` (raw hex) rather than `pxj` (JSON list) — roughly 4x
+  faster for the megabyte-scale scans in `scan_vmts` / `scan_delphi_strings`.
+- VMT parent resolution dereferences once: `vmtParent` stores the address of
+  the parent VMT's `SelfPtr` slot, not the parent VMT itself.

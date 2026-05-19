@@ -113,14 +113,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
         git+https://github.com/P1sec/hermes-dec.git \
         git+https://github.com/bongtrop/hbctool.git
 
-# ---------- Install Radare2 (prebuilt .deb from radareorg) ----------
+# ---------- Install Radare2 (prebuilt .deb from radareorg) + r2pipe Python bindings ----------
 ARG RADARE2_VERSION=6.1.4
 RUN curl -fsSL -o /tmp/radare2.deb \
       "https://github.com/radareorg/radare2/releases/download/${RADARE2_VERSION}/radare2_${RADARE2_VERSION}_amd64.deb" \
     && apt-get update \
     && apt-get install -y --no-install-recommends /tmp/radare2.deb \
     && rm /tmp/radare2.deb \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir r2pipe
+
+# ---------- Install project reversing scripts ----------
+COPY tools/scripts/delphi_reverser.py /opt/scripts/delphi_reverser.py
+RUN chmod +x /opt/scripts/delphi_reverser.py \
+    && printf '#!/bin/sh\nexec python3 /opt/scripts/delphi_reverser.py "$@"\n' > /usr/local/bin/delphi-reverser \
+    && chmod +x /usr/local/bin/delphi-reverser
 
 # ---------- Install re-dotnet ----------
 RUN apt-get update && apt-get install -y --no-install-recommends \
