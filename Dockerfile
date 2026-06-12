@@ -1,7 +1,7 @@
 FROM python:3.13-slim AS base
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    IDADIR=/opt/ida-pro-9.3 \
+    IDADIR=/opt/ida-pro \
     PYTHONUNBUFFERED=1 \
     IDA_MCP_LOG_LEVEL=DEBUG \
     DOTNET_ROOT=/usr/share/dotnet \
@@ -60,10 +60,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #     && rm /tmp/dotnet-install.sh
 
 # ---------- Install IDA Pro ----------
-COPY tools/ida/ida-pro_93_x64linux.run /tmp/ida-installer.run
+COPY tools/ida/ida-pro_94_x64linux.run /tmp/ida-installer.run
 RUN chmod +x /tmp/ida-installer.run \
     && /tmp/ida-installer.run --mode unattended --prefix ${IDADIR} \
-    && ln -s ${IDADIR} /opt/ida-pro \
     && rm /tmp/ida-installer.run
 
 # ---------- Patch IDA + generate license via keygen.js ----------
@@ -156,7 +155,7 @@ WORKDIR /workspace
 RUN uv tool install re-mcp-ida # re-mcp-ida is the new name for the IDA MCP UV tool; it provides the same functionality but with a more consistent naming scheme across our MCP tools
 
 # ---------- Activate IDA idalib for Python ----------
-RUN pip install ${IDADIR}/idalib/python/idapro-0.0.7-py3-none-any.whl \
+RUN pip install ${IDADIR}/idalib/python/idapro-*.whl \
     && pip install angr unicorn
 RUN python ${IDADIR}/idalib/python/py-activate-idalib.py -d ${IDADIR}
 

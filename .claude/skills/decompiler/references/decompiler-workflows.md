@@ -12,9 +12,10 @@ SELECT decompile(0x401000);
 
 2. Baseline mutation surfaces (must exist in all supported plugin runtimes):
 ```sql
-SELECT set_name(0x401000, 'my_func');
-SELECT rename_lvar(0x401000, 0, 'arg0');
-SELECT set_lvar_comment(0x401000, 0, 'seed comment');
+-- INSERT acts as upsert at the EA; UPDATE names SET name = ... WHERE address = ... is equivalent.
+INSERT INTO names(address, name) VALUES (0x401000, 'my_func');
+UPDATE ctree_lvars SET name = 'arg0' WHERE func_addr = 0x401000 AND idx = 0;
+UPDATE ctree_lvars SET comment = 'seed comment' WHERE func_addr = 0x401000 AND idx = 0;
 ```
 
 3. Advanced expression/representation helpers (optional in older/minimal runtimes):
@@ -34,7 +35,7 @@ If any call returns `no such function`, treat that primitive as unavailable in t
 For multi-step decompiler cleanup, use this phase order:
 1. Apply structural typing first: `parse_decls`, prototypes, `ctree_lvars.type`, global types.
 2. Inspect `ctree_v_indirect_calls` for unresolved indirect call sites.
-3. Apply `apply_callee_type(call_ea, decl)` only where function/local typing is still insufficient.
+3. Update `disasm_calls.callee_type` only where function/local typing is still insufficient.
 4. Refresh once with `decompile(func_addr, 1)` so the typed ctree/lvars are current.
 5. Apply rename/label/union-selection/numform/comment cleanup against the refreshed rows.
 6. Refresh and verify again.
@@ -51,20 +52,19 @@ WHERE func_addr = 0x140001BD0
 ORDER BY call_ea;
 
 -- 2. Apply an explicit prototype at one call site
-SELECT apply_callee_type(
-  0x140001C3E,
-  'int __fastcall emit_message(const char *name, const char *target, int flag, const char *tag);'
-);
+UPDATE disasm_calls
+SET callee_type = 'int __fastcall emit_message(const char *name, const char *target, int flag, const char *tag);'
+WHERE ea = 0x140001C3E;
 
 -- 3. Verify persisted call metadata
-SELECT callee_type_at(0x140001C3E);
+SELECT callee_type FROM disasm_calls WHERE ea = 0x140001C3E;
 SELECT call_arg_addrs(0x140001C3E);
 
 -- 4. Refresh once after semantic typing
 SELECT decompile(0x140001BD0, 1);
 ```
 
-`apply_callee_type` is a semantic typing surface. It is different from render-only helpers like `set_union_selection*` and `set_numform*`.
+`disasm_calls.callee_type` is a semantic typing surface. It is different from render-only helpers like `set_union_selection*` and `set_numform*`.
 
 ## Local Type Seeding (Works Even In Minimal Runtimes)
 
@@ -92,8 +92,9 @@ If `set_union_selection*` / `set_numform*` / `ctree_item_at` are unavailable:
 
 - Use `UPDATE funcs SET prototype = ...` for function-level typing.
 - Use `UPDATE ctree_lvars SET type/comment = ...` for local shaping.
-- Prefer `rename_lvar*` for local names, even in fallback flows.
+- Use `UPDATE ctree_lvars SET name = ...` after selecting a deterministic `idx`.
 - Use `UPDATE pseudocode SET comment = ...` for stable semantic breadcrumbs.
+- Use `UPDATE funcs SET folder_path = ...` to move reviewed functions through folders such as `idasql/review/needs-types`, `idasql/review/annotated`, and `idasql/review/verified`.
 - Keep constants readable via comments when enum rendering primitives are unavailable.
 - Explicitly note unavailable primitives in your response so follow-up runs don't waste queries.
 
@@ -107,29 +108,35 @@ SELECT decompile(0x401000);
 SELECT decompile(0x401000, 1);
 
 -- Get all local variables in a function
-SELECT list_lvars(0x401000);
+SELECT idx, name, type, comment, size, is_arg, is_result, stkoff, mreg FROM ctree_lvars WHERE func_addr = 0x401000 ORDER BY idx;
 
 -- Rename by index (canonical, deterministic)
-SELECT rename_lvar(0x401000, 2, 'buffer_size');
+UPDATE ctree_lvars SET name = 'buffer_size' WHERE func_addr = 0x401000 AND idx = 2;
 
--- Rename by current name (convenience; fails if ambiguous)
-SELECT rename_lvar_by_name(0x401000, 'v2', 'buffer_size');
+-- Rename by current name: inspect/select one idx first, then update by idx
+UPDATE ctree_lvars SET name = 'buffer_size'
+WHERE func_addr = 0x401000
+  AND idx = (
+    SELECT idx FROM ctree_lvars
+    WHERE func_addr = 0x401000 AND name = 'v2'
+    ORDER BY idx LIMIT 1
+  );
 
 -- If you discovered the target via stack slot or another query, resolve idx first
-SELECT rename_lvar(
-  0x401000,
-  (SELECT idx
-   FROM ctree_lvars
-   WHERE func_addr = 0x401000 AND stkoff = 32
-   ORDER BY idx
-   LIMIT 1),
-  'ctx');
+UPDATE ctree_lvars SET name = 'ctx'
+WHERE func_addr = 0x401000
+  AND idx = (
+    SELECT idx
+    FROM ctree_lvars
+    WHERE func_addr = 0x401000 AND stkoff = 32
+    ORDER BY idx
+    LIMIT 1
+  );
 
 -- Set local-variable comment by index
-SELECT set_lvar_comment(0x401000, 2, 'points to decrypted buffer');
+UPDATE ctree_lvars SET comment = 'points to decrypted buffer' WHERE func_addr = 0x401000 AND idx = 2;
 
 -- Simple current-row UPDATE path for rename
--- Prefer rename_lvar* for split/array locals or scripted cleanup
 UPDATE ctree_lvars SET name = 'buffer_size'
 WHERE func_addr = 0x401000 AND idx = 2;
 
@@ -139,10 +146,10 @@ WHERE func_addr = 0x401000 AND idx = 2;
 
 -- Fallback when direct UPDATE comment write fails on a specific lvar
 -- (some runtimes can return "SQL logic error" for particular slots):
-SELECT set_lvar_comment(0x401000, 2, 'points to decrypted buffer');
+UPDATE ctree_lvars SET comment = 'points to decrypted buffer' WHERE func_addr = 0x401000 AND idx = 2;
 
 -- Mandatory verification loop after rename
-SELECT list_lvars(0x401000);
+SELECT idx, name, type, comment, size, is_arg, is_result, stkoff, mreg FROM ctree_lvars WHERE func_addr = 0x401000 ORDER BY idx;
 SELECT decompile(0x401000, 1);
 
 -- Import declarations + apply prototype to improve decompilation quality
@@ -208,12 +215,10 @@ SELECT ctree_item_at(0x140001BD0, 0x140001C49, 'cot_asg', 0);
 SELECT set_union_selection_ea_expr(0x140001BD0, 0x140001C49, '', 'cot_asg', 0);
 ```
 
-`rename_lvar*` functions return JSON with explicit fields:
-- `success` (execution success)
-- `applied` (observable rename applied)
-- `reason` (for non-applied cases: `not_found`, `ambiguous_name`, `unchanged`, `not_nameable`, ...)
-
-`rename_label` returns the same `success`/`applied`/`reason` contract with label-specific fields (`label_num`, `before_name`, `after_name`).
+Decompiler local and label mutation is table-driven:
+- List locals with `ctree_lvars WHERE func_addr = ... ORDER BY idx`.
+- Rename/comment locals with `UPDATE ctree_lvars` using `func_addr + idx`.
+- Rename labels with `UPDATE ctree_labels` using `func_addr + label_num`.
 
 ## Persistence and Lifecycle Semantics
 

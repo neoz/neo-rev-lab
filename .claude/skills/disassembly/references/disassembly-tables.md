@@ -15,7 +15,7 @@ Function chunks (for functions with non-contiguous code, like exception handlers
 
 ```sql
 -- Functions with multiple chunks (complex control flow)
-SELECT func_at(owner) as name, COUNT(*) as chunks
+SELECT (SELECT name FROM funcs WHERE owner >= address AND owner < end_ea LIMIT 1) as name, COUNT(*) as chunks
 FROM fchunks GROUP BY owner HAVING chunks > 1;
 ```
 
@@ -27,33 +27,47 @@ All defined items (code/data heads) in the database.
 |--------|------|-------------|
 | `address` | INT | Head address |
 | `size` | INT | Item size |
+| `type` | TEXT | Item type (`code`, `data`, `string`, etc.) |
 | `flags` | INT | IDA flags |
 
-**Performance:** This table can be very large. Always use address range filters.
+**Performance:** `WHERE address = X` and address range filters are optimized. Next/previous navigation should use `ORDER BY address [DESC] LIMIT 1`; broad scans can still be large.
 
 ## bytes
 
-Byte-level read/write table for patching and physical-offset mapping.
+Pure mapped-byte read/write table for patching and physical-offset mapping.
+Use `heads` for IDA item size/type metadata; `bytes` includes item-tail bytes.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `ea` | INT | Address |
-| `value` | INT | Current byte value (RW) |
+| `value` | INT | Current byte value (RW; UPDATE patches 1 byte) |
+| `word` | INT | 2-byte little-endian value (RW; UPDATE patches 2 bytes) |
+| `dword` | INT | 4-byte little-endian value (RW; UPDATE patches 4 bytes) |
+| `qword` | INT | 8-byte little-endian value (RW; UPDATE patches 8 bytes) |
 | `original_value` | INT | Original byte before patch |
-| `is_patched` | INT | 1 if byte differs from original |
+| `is_patched` | INT | 1 if byte differs from original (`WHERE is_patched = 1` enumerates patches fast) |
 | `fpos` | INT | Physical/input file offset (NULL when unmapped) |
 
+Revert a patch with `DELETE FROM bytes WHERE ea = ...` (or `WHERE is_patched = 1`).
+
 ```sql
--- Inspect EA + physical offset mapping
+-- Inspect EA + physical offset mapping over a tight byte range
 SELECT printf('0x%X', ea) AS ea, fpos, value
 FROM bytes
-WHERE ea BETWEEN 0x401000 AND 0x401020;
+WHERE ea >= 0x401000 AND ea < 0x401020
+ORDER BY ea;
 
--- Join current bytes with patch inventory offsets
-SELECT b.ea, b.fpos, p.original_value, p.patched_value
+-- Add item metadata when the byte is also an item head
+SELECT b.ea, b.value, h.size, h.type
 FROM bytes b
-JOIN patched_bytes p ON p.ea = b.ea
-WHERE b.fpos IS NOT NULL;
+LEFT JOIN heads h ON h.address = b.ea
+WHERE b.ea >= 0x401000 AND b.ea < 0x401020
+ORDER BY b.ea;
+
+-- Patch inventory with file offsets (is_patched enumerates patches fast)
+SELECT ea, fpos, original_value, value AS patched_value
+FROM bytes
+WHERE is_patched = 1 AND fpos IS NOT NULL;
 ```
 
 ## disasm_loops
@@ -82,7 +96,7 @@ Views for disassembly-level analysis (no Hex-Rays required):
 SELECT * FROM disasm_v_leaf_funcs LIMIT 10;
 
 -- Find hotspot calls (inside loops)
-SELECT func_at(func_addr) as func, callee_name
+SELECT (SELECT name FROM funcs WHERE func_addr >= address AND func_addr < end_ea LIMIT 1) as func, callee_name
 FROM disasm_v_calls_in_loops;
 ```
 

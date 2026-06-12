@@ -25,8 +25,6 @@ This skill is a **comprehensive catalog** of every idasql SQL function. Use it t
 | `disasm_func(addr)` | Full disassembly of function containing address |
 | `make_code(addr)` | Create instruction at address (returns 1 if already code or created) |
 | `make_code_range(start, end)` | Create instructions in [start, end), returns number created |
-| `mnemonic(addr)` | Instruction mnemonic only |
-| `operand(addr, n)` | Operand text (n=0-5) |
 
 ```sql
 SELECT disasm_at(0x401000);
@@ -48,37 +46,51 @@ INSERT INTO funcs (address) VALUES (0x401000);
 
 ## Byte Access and Patching
 
+Byte reads, bulk reads, and patching all go through the `bytes` table.
+`load_file_bytes(...)` writes a host file's bytes into the IDB at a given
+range; it returns `1` on success, `0` on failure.
+
 | Function | Description |
 |----------|-------------|
-| `bytes(addr, n)` | Read `n` bytes as hex string |
-| `bytes_raw(addr, n)` | Read `n` bytes as BLOB |
-| `load_file_bytes(path, file_offset, address, size[, patchable])` | Load bytes from a host file into IDB memory/file image |
-| `patch_byte(addr, val)` | Patch one byte at `addr` (returns 1/0) |
-| `patch_word(addr, val)` | Patch 2 bytes at `addr` (returns 1/0) |
-| `patch_dword(addr, val)` | Patch 4 bytes at `addr` (returns 1/0) |
-| `patch_qword(addr, val)` | Patch 8 bytes at `addr` (returns 1/0) |
-| `revert_byte(addr)` | Revert one patched byte to original |
-| `get_original_byte(addr)` | Read original (pre-patch) byte |
+| `load_file_bytes(path, file_offset, address, size[, patchable])` | Write host file bytes into IDB memory at the target range |
+| `blob_concat(value)` | libxsql aggregate — concatenate byte values into one BLOB |
 
 ```sql
-SELECT bytes(0x401000, 16);
-SELECT patch_byte(0x401000, 0x90) AS ok;
-SELECT bytes(0x401000, 1) AS current, get_original_byte(0x401000) AS original;
-SELECT revert_byte(0x401000) AS reverted;
+-- Read 16 bytes as uppercase hex
+SELECT hex(blob_concat(value))
+FROM (SELECT value FROM bytes WHERE start_ea = 0x401000 AND n = 16 ORDER BY ea);
+
+-- Read 64 bytes as BLOB
+SELECT blob_concat(value)
+FROM (SELECT value FROM bytes WHERE start_ea = 0x401000 AND n = 64 ORDER BY ea);
+
+-- Patch 1 byte and 4 LE bytes
+UPDATE bytes SET value = 0x90 WHERE ea = 0x401000;
+UPDATE bytes SET dword = 0x90909090 WHERE ea = 0x401000;
+SELECT value AS current, original_value AS original FROM bytes WHERE ea = 0x401000;
+DELETE FROM bytes WHERE ea = 0x401000;                   -- revert
 ```
 
-`load_file_bytes(...)` is intended for file-driven bulk patching workflows. It returns `1` on success, `0` on failure.
+For composable row-shaped reads use the `bytes` table directly:
+`SELECT ea, value FROM bytes WHERE ea >= :start AND ea < :end ORDER BY ea`.
+Use `heads` for item size/type metadata.
 
 ---
 
 ## Binary Search
 
-| Function | Description |
-|----------|-------------|
-| `search_bytes(pattern)` | Find all matches, returns JSON array |
-| `search_bytes(pattern, start, end)` | Search within address range |
-| `search_first(pattern)` | First match address (or NULL) |
-| `search_first(pattern, start, end)` | First match in range |
+Use the `byte_search` table for raw bytes/opcodes. It is table-shaped so results can be filtered, joined, grouped, and limited directly.
+
+| Column | Description |
+|--------|-------------|
+| `address` | Match address |
+| `matched_hex` | Matched bytes rendered as hex text |
+| `matched_bytes` | Matched bytes as a BLOB |
+| `size` | Match size in bytes |
+| `pattern` | Hidden required input: IDA byte pattern |
+| `start_ea` | Hidden optional inclusive lower bound |
+| `end_ea` | Hidden optional exclusive upper bound |
+| `max_results` | Hidden optional generator cap |
 
 **Pattern syntax (IDA native):**
 - `"48 8B 05"` - Exact bytes (hex, space-separated)
@@ -86,80 +98,142 @@ SELECT revert_byte(0x401000) AS reverted;
 - `"(01 02 03)"` - Alternatives (match any of these bytes)
 
 ```sql
-SELECT search_bytes('48 8B ? 00');
-SELECT json_extract(value, '$.address') as addr
-FROM json_each(search_bytes('48 89 ?')) LIMIT 10;
-SELECT printf('0x%llX', search_first('CC CC CC'));
+SELECT address, matched_hex, size
+FROM byte_search
+WHERE pattern = '48 8B ? 00'
+LIMIT 10;
+
+SELECT printf('0x%llX', address) AS addr
+FROM byte_search
+WHERE pattern = 'CC CC CC'
+ORDER BY address
+LIMIT 1;
 ```
 
 **Optimization Pattern:**
 ```sql
 -- Count unique functions containing RDTSC (opcode: 0F 31)
-SELECT COUNT(DISTINCT func_start(json_extract(value, '$.address'))) as count
-FROM json_each(search_bytes('0F 31'))
-WHERE func_start(json_extract(value, '$.address')) IS NOT NULL;
+SELECT COUNT(DISTINCT f.address) as count
+FROM byte_search b
+JOIN funcs f ON b.address >= f.address AND b.address < f.end_ea
+WHERE b.pattern = '0F 31';
 ```
 
 ---
 
 ## Names & Functions
 
-Address argument note: `addr`/`ea`/`func_addr` parameters accept integer EAs, numeric strings, and symbol names.
+Use table lookups for address and containing-function metadata. Resolve symbol names to integer EAs before using these patterns.
 
-| Function | Description |
-|----------|-------------|
-| `name_at(addr)` | Name at address |
-| `func_at(addr)` | Function name containing address |
-| `func_start(addr)` | Start of containing function |
-| `func_end(addr)` | End of containing function |
-| `func_qty()` | Total function count |
-| `func_at_index(n)` | Function address at index (O(1)) |
+| Pattern | Description |
+|---------|-------------|
+| `SELECT name FROM names WHERE address = :ea LIMIT 1` | Name at address |
+| `SELECT name FROM funcs WHERE :ea >= address AND :ea < end_ea LIMIT 1` | Function containing address |
+| `SELECT address FROM funcs WHERE :ea >= address AND :ea < end_ea LIMIT 1` | Start of containing function |
+| `SELECT end_ea FROM funcs WHERE :ea >= address AND :ea < end_ea LIMIT 1` | End of containing function |
+
+Function count and index lookup are table-driven:
+
+```sql
+SELECT COUNT(*) AS function_count FROM funcs;
+SELECT address FROM funcs WHERE rowid = 0;
+```
 
 ---
 
 ## Cross-References
 
-| Function | Description |
-|----------|-------------|
-| `xrefs_to(addr)` | JSON array of xrefs TO address |
-| `xrefs_from(addr)` | JSON array of xrefs FROM address |
+Cross-reference edge queries are table-driven:
+
+```sql
+SELECT from_ea, to_ea, type, is_code, from_func
+FROM xrefs
+WHERE to_ea = 0x401000;
+
+SELECT from_ea, to_ea, type, is_code, from_func
+FROM xrefs
+WHERE from_ea = 0x401000;
+
+SELECT from_ea, to_ea, type, is_code, from_func
+FROM xrefs
+WHERE from_func = 0x401000;
+```
 
 ---
 
 ## Navigation
 
-| Function | Description |
-|----------|-------------|
-| `next_head(addr)` | Next defined item |
-| `prev_head(addr)` | Previous defined item |
-| `segment_at(addr)` | Segment name at address |
-| `hex(val)` | Format as hex string |
+Use `heads` ordering for defined-item navigation and SQLite formatting functions for display strings. Address equality/range filters are optimized; `ORDER BY address` or `ORDER BY address DESC` is consumed for next/previous-item lookups.
+
+```sql
+SELECT address
+FROM heads
+WHERE address > 0x401000
+ORDER BY address
+LIMIT 1;
+
+SELECT address
+FROM heads
+WHERE address < 0x401000
+ORDER BY address DESC
+LIMIT 1;
+
+SELECT printf('0x%llx', address) AS address_hex
+FROM heads
+LIMIT 10;
+```
+
+Segment lookup is table-driven:
+
+```sql
+SELECT name
+FROM segments
+WHERE 0x401000 >= start_ea
+  AND 0x401000 < end_ea
+LIMIT 1;
+```
 
 ---
 
 ## Comments
 
-| Function | Description |
-|----------|-------------|
-| `comment_at(addr)` | Get comment at address |
-| `set_comment(addr, text)` | Set regular comment |
-| `set_comment(addr, text, 1)` | Set repeatable comment |
+Read comments through the `comments` table:
+
+```sql
+SELECT COALESCE(NULLIF(comment, ''), NULLIF(rpt_comment, '')) AS comment
+FROM comments
+WHERE address = 0x401000
+LIMIT 1;
+```
+
+Write comments through the table:
+
+```sql
+INSERT INTO comments(address, comment) VALUES (0x401000, 'regular comment');
+INSERT INTO comments(address, rpt_comment) VALUES (0x401000, 'repeatable comment');
+-- Replace an existing comment in place
+UPDATE comments SET comment = 'revised comment' WHERE address = 0x401000;
+-- Remove a comment
+DELETE FROM comments WHERE address = 0x401000;
+```
+
+Note: `INSERT` at an address that already has a comment **replaces** it (one comment per slot per EA). `UPDATE` is equivalent.
 
 ---
 
 ## Modification
 
-| Function | Description |
-|----------|-------------|
-| `set_name(addr, name)` | Set name at address |
-| `type_at(addr)` | Read type declaration applied at address |
-| `set_type(addr, decl)` | Apply C declaration/type at address (empty decl clears type; `addr` may be EA, numeric string, or symbol name) |
+| Surface | Description |
+|---------|-------------|
+| `applied_types(address, decl, ordinal, type_name)` | Read/apply/replace/clear C declarations at addresses |
 | `parse_decls(text)` | Import C declarations (struct/union/enum/typedef) into local types |
 
 Preferred SQL write surface for function metadata:
-- `UPDATE funcs SET name = '...', prototype = '...' WHERE address = ...`
-- `prototype` maps to `type_at/set_type` behavior and invalidates decompiler cache.
-- For per-call indirect-call typing, use `apply_callee_type(call_ea, decl)` from the decompiler surface.
+- `UPDATE funcs SET name = '...', prototype = '...', folder_path = 'idasql/review/annotated' WHERE address = ...`
+- `INSERT INTO names(address, name) VALUES (..., '...')` or `UPDATE names SET name = '...' WHERE address = ...`
+- `prototype` maps to `applied_types` behavior and invalidates decompiler cache.
+- `folder_path` moves functions in IDA's Function window tree; create/rename/delete empty folders through `dirtree_folders`.
+- For per-call indirect-call typing, update `disasm_calls.callee_type`.
 
 ---
 
@@ -187,7 +261,7 @@ SELECT idapython_snippet('counter = globals().get("counter", 0) + 1; print(count
 
 | Function | Description |
 |----------|-------------|
-| `get_ui_context_json()` | Return current UI/widget/context JSON for context-aware prompts (plugin-only) |
+| `get_ui_context_json()` | Return current UI/widget/context JSON for context-aware prompts (registered everywhere; live UI in the GUI plugin, a `source:"cli"` stub under idalib/CLI) |
 
 ```sql
 SELECT get_ui_context_json();
@@ -197,29 +271,37 @@ SELECT get_ui_context_json();
 
 ## Item Analysis
 
-| Function | Description |
-|----------|-------------|
-| `item_type(addr)` | Item type flags at address |
-| `item_size(addr)` | Item size at address |
-| `is_code(addr)` | Returns 1 if address is code |
-| `is_data(addr)` | Returns 1 if address is data |
-| `flags_at(addr)` | Raw IDA flags at address |
+Use `heads` for item classification, size, and raw flags:
+
+```sql
+SELECT address, size, type, flags, disasm
+FROM heads
+WHERE address = 0x401000;
+```
 
 ---
 
 ## Instruction Details
 
-| Function | Description |
-|----------|-------------|
-| `itype(addr)` | Instruction type code (processor-specific) |
-| `decode_insn(addr)` | Full instruction info as JSON |
-| `operand_type(addr, n)` | Operand type code (o_void, o_reg, etc.) |
-| `operand_value(addr, n)` | Operand value (register num, immediate, etc.) |
+Use `instructions` and `instruction_operands` for decoded instruction facts. `instruction_operands` exposes one row per non-void operand.
 
 ```sql
-SELECT address, itype(address) as itype, mnemonic(address)
-FROM heads WHERE is_code(address) = 1 LIMIT 10;
-SELECT decode_insn(0x401000);
+SELECT address, itype, mnemonic
+FROM instructions
+WHERE func_addr = 0x401000
+LIMIT 10;
+
+SELECT opnum, text, type_code, type_name, value
+FROM instruction_operands
+WHERE address = 0x401000
+ORDER BY opnum;
+
+SELECT i.address, i.itype, i.mnemonic, i.size, o.opnum, o.text, o.type_name, o.value
+FROM instructions i
+LEFT JOIN instruction_operands o
+  ON o.address = i.address AND o.address = 0x401000
+WHERE i.address = 0x401000
+ORDER BY o.opnum;
 ```
 
 ---
@@ -230,14 +312,7 @@ SELECT decode_insn(0x401000);
 |----------|-------------|
 | `decompile(addr)` | **PREFERRED** — Full pseudocode with line prefixes |
 | `decompile(addr, 1)` | Force re-decompilation (use after writes/renames) |
-| `apply_callee_type(call_ea, decl)` | Apply a prototype to one indirect/dynamic call site |
-| `callee_type_at(call_ea)` | Read explicit call-site prototype when present |
 | `call_arg_addrs(call_ea)` | JSON array of persisted argument-loader instruction EAs |
-| `list_lvars(addr)` | List local variables as JSON |
-| `rename_lvar(func_addr, lvar_idx, new_name)` | Rename a local variable by index |
-| `rename_lvar_by_name(func_addr, old_name, new_name)` | Rename a local variable by existing name |
-| `rename_label(func_addr, label_num, new_name)` | Rename a decompiler control-flow label by label number |
-| `set_lvar_comment(func_addr, lvar_idx, text)` | Set local-variable comment by index |
 | `set_union_selection(func_addr, ea, path)` | Set/clear union selection path at EA |
 | `set_union_selection_item(func_addr, item_id, path)` | Set/clear union selection path by `ctree.item_id` |
 | `set_union_selection_ea_arg(func_addr, ea, arg_idx, path[, callee])` | **PREFERRED** call-arg targeting helper |
@@ -257,10 +332,10 @@ SELECT decode_insn(0x401000);
 | `set_numform_ea_expr(func_addr, ea, opnum, spec[, op_name[, nth]])` | Set/clear numform via expression coordinate |
 | `get_numform_ea_expr(func_addr, ea, opnum[, op_name[, nth]])` | Read numform JSON via expression coordinate |
 
-`rename_lvar*` functions return JSON with explicit fields:
-- `success` (execution success)
-- `applied` (observable rename applied)
-- `reason` (for non-applied cases: `not_found`, `ambiguous_name`, `unchanged`, `not_nameable`, ...)
+Decompiler local and label mutation is table-driven:
+- List locals with `SELECT idx, name, type, comment, size, is_arg, is_result, stkoff, mreg FROM ctree_lvars WHERE func_addr = ... ORDER BY idx`.
+- Rename or comment locals with `UPDATE ctree_lvars SET name = ...` or `comment = ...` using `func_addr` plus a selected `idx`.
+- Rename labels with `UPDATE ctree_labels SET name = ... WHERE func_addr = ... AND label_num = ...`.
 
 ---
 
@@ -298,12 +373,10 @@ Canonical workflow guidance lives in `../grep/SKILL.md`.
 | Surface | Description |
 |---------|-------------|
 | `grep` table | Structured rows for composable SQL search |
-| `grep(pattern, limit, offset)` | JSON array for quick agent/tool output |
 
 ```sql
 SELECT name, kind, address FROM grep WHERE pattern = 'sub%' LIMIT 10;
-SELECT grep('sub%', 10, 0);
-SELECT grep('init');  -- defaults: limit 50, offset 0
+SELECT name, kind, address FROM grep WHERE pattern = 'init' LIMIT 50 OFFSET 0;
 ```
 
 ---
@@ -315,13 +388,20 @@ SELECT grep('init');  -- defaults: limit 50, offset 0
 | `rebuild_strings()` | Rebuild with ASCII + UTF-16, minlen 5 (default) |
 | `rebuild_strings(minlen)` | Rebuild with custom minimum length |
 | `rebuild_strings(minlen, types)` | Rebuild with custom length and type mask |
-| `string_count()` | Get current string count (no rebuild) |
 
 Type mask: `1`=ASCII, `2`=UTF-16, `4`=UTF-32, `3`=ASCII+UTF-16 (default), `7`=all.
+Use `COUNT(*) FROM strings` for the current string-list count without materializing string rows.
 
 ```sql
-SELECT string_count();
+SELECT COUNT(*) AS strings FROM strings;
 SELECT rebuild_strings();
 SELECT rebuild_strings(4);
 SELECT rebuild_strings(5, 7);
 ```
+
+---
+
+## See Also
+
+- `connect` — front-door catalog and routing matrix; use when picking a skill, not a function.
+- The relevant per-topic skill for any function (`data` for bytes/strings, `decompiler` for `decompile()`, `disassembly` for `disasm_*`, `types` for `parse_decls`, `debugger` for patching helpers).

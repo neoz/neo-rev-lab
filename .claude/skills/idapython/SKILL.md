@@ -41,7 +41,7 @@ SELECT idapython_snippet('counter = globals().get("counter", 0) + 1; print(count
 
 ### Two Python Contexts (Important)
 
-- **Host-side Python client** (outside IDA): use `requests.post(.../query, data=sql)` to batch SQL over HTTP. Use this for loops, bulk updates, and automation orchestration. See `connect` skill HTTP client patterns.
+- **Host-side Python client** (outside IDA): use `requests.post(.../query, data=sql)` to send SQL over HTTP. The body may be one statement or a semicolon-separated script; script responses use `statements[]` instead of top-level `rows`. Use this for loops, bulk updates, and automation orchestration. See `connect` skill HTTP client patterns.
 - **IDAPython via SQL** (inside IDA): use `idapython_snippet()` / `idapython_file()` when you need direct IDA SDK APIs in-process.
 
 Example contrast:
@@ -49,7 +49,7 @@ Example contrast:
 ```python
 # Host-side Python (outside IDA): sends SQL over HTTP
 import requests
-requests.post("http://127.0.0.1:8081/query", data="SELECT COUNT(*) FROM funcs")
+requests.post("http://127.0.0.1:8080/query", data="SELECT COUNT(*) FROM funcs")
 ```
 
 ```sql
@@ -141,3 +141,10 @@ print(json.dumps(result))
 -- Then process the JSON output in SQL using json_each()
 -- (copy the output from above into the query)
 ```
+
+---
+
+## See Also
+
+- Check the relevant SQL skill first (`disassembly`, `decompiler`, `types`, `data`, `xrefs`, `annotations`, `debugger`) — fall through to IDAPython only when no SQL surface exists for the task.
+- `functions` — the SQL function catalog; verify a scalar/helper doesn't already exist before scripting.

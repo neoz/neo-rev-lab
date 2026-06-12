@@ -100,12 +100,14 @@ For canonical schema and owner mapping, see `../connect/references/schema-catalo
 
 ### types
 
-All local type definitions. Supports INSERT (create struct/union/enum), UPDATE, and DELETE.
+All local type definitions. Supports INSERT (create struct/union/enum), UPDATE, DELETE, and local type folder organization through `folder_path`.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `ordinal` | INT | Type ordinal (unique identifier) |
 | `name` | TEXT | Type name |
+| `folder_path` | TEXT | RW local type folder relative to Local Types root; `NULL`/`''` means root |
+| `full_path` | TEXT | RO full dirtree path, including the type name |
 | `size` | INT | Size in bytes |
 | `kind` | TEXT | struct/union/enum/typedef/func |
 | `is_struct` | INT | 1=struct |
@@ -121,7 +123,66 @@ SELECT ordinal, name FROM types WHERE is_enum = 1;
 
 -- Find types by name pattern
 SELECT * FROM types WHERE name LIKE '%CONTEXT%';
+
+-- Review type organization
+SELECT ordinal, name, folder_path
+FROM types
+WHERE folder_path LIKE 'idasql/types/%'
+ORDER BY folder_path, name;
 ```
+
+### Organizing Local Types
+
+Use `types.folder_path` for type recovery buckets and `dirtree_folders` for empty folder lifecycle. This is useful when recovered layouts move from draft to verified states.
+
+```sql
+INSERT INTO dirtree_folders(tree, path)
+VALUES ('local_types', 'idasql/types/recovered');
+
+UPDATE types
+SET folder_path = 'idasql/types/recovered'
+WHERE name IN ('MY_HEADER', 'COMMAND_RECORD');
+
+UPDATE types
+SET folder_path = 'idasql/types/verified'
+WHERE name = 'MY_HEADER';
+
+UPDATE types SET folder_path = NULL WHERE name = 'MY_HEADER';
+```
+
+For raw browsing across all IDA dirtrees, use `dirtree_entries`; for normal type organization, prefer `types.folder_path`. Folder writes use relative `/` paths. IDASQL rejects `.`/`..`, duplicate separators, backslashes, non-empty folder deletes, and folder renames whose destination already exists.
+
+### local_type_bookmarks
+
+Local-type (Local Types view) bookmarks, backed by the `bookmarks_t` store and
+folder-aware via the `DIRTREE_LTYPES_BOOKMARKS` dirtree. Full CRUD:
+
+| Column | Type | RW | Description |
+|--------|------|----|-------------|
+| `slot` | INT | R | Bookmark slot in the store |
+| `ordinal` | INT | R | Local type ordinal |
+| `type_name` | TEXT | R | Type name resolved from the ordinal |
+| `description` | TEXT | RW | Bookmark description |
+| `inode` | INT | R | Dirtree inode (`-1` if not linked into the dirtree) |
+| `folder_path` | TEXT | RW | Folder path; `NULL`/`''` means root |
+| `full_path` | TEXT | R | Full dirtree path |
+
+```sql
+-- Create a bookmark on a local type
+INSERT INTO local_type_bookmarks(ordinal, description)
+SELECT ordinal, 'review this struct' FROM types WHERE name = 'MY_STRUCT';
+
+-- Edit / list / delete
+UPDATE local_type_bookmarks SET description = 'done' WHERE ordinal = 42;
+SELECT slot, ordinal, type_name, description FROM local_type_bookmarks;
+DELETE FROM local_type_bookmarks WHERE ordinal = 42;
+```
+
+Note: a freshly INSERTed bookmark is created in the `bookmarks_t` store but is
+not auto-linked into the dirtree (so `folder_path` is `NULL` until linked), and
+folder moves currently require an already-linked bookmark. Reliably mapping a
+store slot back to its dirtree inode (to auto-link on INSERT) is a known
+limitation.
 
 ### Creating Types
 
@@ -366,18 +427,31 @@ For a full multi-struct `parse_decls` example with nested unions, see [reference
 UPDATE funcs SET prototype = 'void __fastcall exec_command(command_t *cmd);'
 WHERE address = 0x140001BD0;
 
--- Apply via set_type function
-SELECT set_type(0x140001BD0, 'void __fastcall exec_command(command_t *cmd);');
+-- Apply/replace the type at any mapped address
+INSERT INTO applied_types(address, decl)
+VALUES (0x140001BD0, 'void __fastcall exec_command(command_t *cmd);');
 
 -- Read current type at address
-SELECT type_at(0x140001BD0);
+SELECT decl, ordinal, type_name
+FROM applied_types
+WHERE address = 0x140001BD0;
+
+-- Address equality also accepts numeric strings and symbol names
+UPDATE applied_types
+SET decl = 'void __fastcall exec_command(command_t *cmd);'
+WHERE address = 'exec_command';
 
 -- Clear type (reset to auto-detected)
-SELECT set_type(0x140001BD0, '');
+DELETE FROM applied_types WHERE address = 0x140001BD0;
 
 -- Re-decompile to see effect
 SELECT decompile(0x140001BD0, 1);
 ```
+
+`applied_types` point lookup is intentionally write-friendly: `WHERE address = X`
+returns one mapped row even when no declaration is applied yet, with `decl`,
+`ordinal`, and `type_name` as NULL. Range scans return only addresses that
+currently have applied type information.
 
 ### Local Variables
 
@@ -404,13 +478,12 @@ WHERE func_addr = 0x140001BD0
 ORDER BY call_ea;
 
 -- Apply a prototype to one call site
-SELECT apply_callee_type(
-  0x140001C3E,
-  'int __fastcall emit_message(const char *name, const char *target, int flag, const char *tag);'
-);
+UPDATE disasm_calls
+SET callee_type = 'int __fastcall emit_message(const char *name, const char *target, int flag, const char *tag);'
+WHERE ea = 0x140001C3E;
 
 -- Verify the persisted call-site typing
-SELECT callee_type_at(0x140001C3E);
+SELECT callee_type FROM disasm_calls WHERE ea = 0x140001C3E;
 SELECT call_arg_addrs(0x140001C3E);
 SELECT decompile(0x140001BD0, 1);
 ```
@@ -419,9 +492,9 @@ SELECT decompile(0x140001BD0, 1);
 
 | Surface | Scope | Semantic vs render-only | Typical use |
 |---------|-------|-------------------------|-------------|
-| `UPDATE funcs SET prototype = ...` / `set_type()` | Function/global address | Semantic | Give a function or global the right declared type |
+| `UPDATE funcs SET prototype = ...` / `applied_types` | Function/global address | Semantic | Give a function or global the right declared type |
 | `UPDATE ctree_lvars SET type = ...` | One decompiled local/arg | Semantic | Clean up local pointer/struct inference |
-| `apply_callee_type(call_ea, decl)` | One call site | Semantic | Fix an indirect call when the callee prototype must be explicit |
+| `UPDATE disasm_calls SET callee_type = ... WHERE ea = ...` | One call site | Semantic | Fix an indirect call when the callee prototype must be explicit |
 | `instructions.operand*_format_spec` | One disassembly operand | Render-only | Show enums/struct offsets in listing output |
 | `set_union_selection*` | One decompiler expression | Render-only | Choose a union arm for nicer pseudocode |
 | `set_numform*` | One decompiler expression operand | Render-only | Change numeric rendering without changing base type |
@@ -429,9 +502,13 @@ SELECT decompile(0x140001BD0, 1);
 ### Names
 
 ```sql
--- Set a name at address
-SELECT set_name(0x402000, 'g_config');
+-- Set a name at address (or replace any existing name at that EA)
+INSERT INTO names(address, name) VALUES (0x402000, 'g_config');
+-- Equivalent: rename in place
+UPDATE names SET name = 'g_config' WHERE address = 0x402000;
 ```
+
+Note: `INSERT` and `UPDATE` against `names` both call IDA's `set_name(ea, name, SN_CHECK)`. IDA permits only one name per address, so `INSERT` at an already-named EA **replaces**. `SN_CHECK` also auto-disambiguates if the new name string conflicts globally (`foo` → `foo_0`); read back the row to see what was actually stored.
 
 ---
 
@@ -444,10 +521,23 @@ The `instructions` table `operand*_format_spec` column applies struct offset dis
 UPDATE instructions SET operand0_format_spec = 'stroff:MY_STRUCT,delta=0'
 WHERE address = 0x401030;
 
+-- Nested member path: separate type names with '/'
+UPDATE instructions SET operand0_format_spec = 'stroff:OUTER_T/INNER_T'
+WHERE address = 0x401030;
+
+-- sizeof: an immediate equal to sizeof(STRUCT) renders as `size STRUCT`
+UPDATE instructions SET operand1_format_spec = 'sizeof:MY_STRUCT'
+WHERE address = 0x4015EB;
+
 -- Apply enum: `enum:CMD_TYPE`; clear back to plain: `clear`
 UPDATE instructions SET operand1_format_spec = 'enum:CMD_TYPE'
 WHERE address = 0x401020;
 ```
+
+Number/offset/forced/char display forms (`hex`/`dec`/`oct`/`bin`, `char`,
+`offset[:base]`, `forced:<text>`, plus `,signed`/`,bnot` modifiers) are also
+applied through `operand*_format_spec` — see the `disassembly` skill for the
+full vocabulary.
 
 ---
 
@@ -455,7 +545,7 @@ WHERE address = 0x401020;
 
 For numform helpers (`set_numform*`) and union selection helpers (`set_union_selection*`), see `decompiler` skill.
 
-`apply_callee_type` belongs on the semantic side of the fence: it affects call analysis, unlike render-only enum/union formatting helpers.
+`disasm_calls.callee_type` belongs on the semantic side of the fence: it affects call analysis, unlike render-only enum/union formatting helpers.
 
 ---
 
@@ -476,11 +566,11 @@ For numform helpers (`set_numform*`) and union selection helpers (`set_union_sel
 
 ---
 
-## Related Skills
+## See Also
 
-- **`annotations`** — Workflow expert: how to combine type application with renaming and commenting
-- **`decompiler`** — Deep ctree mechanics, union selection, numform, mutation loop
-- **`re-source`** — Structure recovery methodology from offset casts
+- `annotations` — apply type via `funcs.prototype` / `applied_types`; combine with renames and comments.
+- `decompiler` — ctree consumes applied types; union selection, numform, mutation loop.
+- `re-source` — structure recovery methodology from offset casts.
 
 ---
 

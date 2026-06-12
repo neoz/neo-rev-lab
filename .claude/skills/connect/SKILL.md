@@ -8,58 +8,94 @@ allowed-tools:
   - Grep
 ---
 
-## Additional Resources
+## CLI Help (verbatim `idasql --help`)
 
-- For canonical schema catalog: [references/schema-catalog.md](references/schema-catalog.md)
-- For CLI reference, REPL commands, server modes, and runtime controls: [references/cli-reference.md](references/cli-reference.md)
-- For legacy parity tracking: [references/legacy-parity-matrix.md](references/legacy-parity-matrix.md)
-- For optimization quality gate: [references/optimization-checklist.md](references/optimization-checklist.md)
-- For HTTP server guide: [references/server-guide.md](references/server-guide.md)
+```
+idasql vX.Y.Z - SQL interface to IDA databases
+
+Usage: idasql -s <file> [-q <query>] [-f <file>] [-i] [--export <file>]
+
+Options:
+  -s <file>            IDA database (.idb/.i64) OR raw binary (.exe/.dll/firmware/etc.)
+                       — raw binaries trigger fresh idalib analysis and string-list rebuild
+                       — legacy 32-bit .idb files upgrade to .i64 and require an explicit reopen
+  --token <token>      Auth token for HTTP/MCP server mode (if server requires it)
+  -q <sql>             Execute SQL query or semicolon-separated script
+  -f <file>            Execute SQL from file
+  -i                   Interactive REPL mode
+  -w, --write          Save database on exit (persist changes)
+  --export <file>      Export tables to SQL file (local mode only)
+  --export-tables=X    Tables to export: * (all, default) or table1,table2,...
+  --http [port]        Start HTTP REST server (default: 8080, local mode only)
+  --bind <addr>        Bind address for HTTP/MCP server (default: 127.0.0.1)
+  --mcp [port]         Start MCP server (default: random port, use in -i mode)
+                       Or use .mcp start in interactive mode
+  -h, --help           Show this help
+  --version            Show version
+
+Examples:
+  idasql -s test.i64 -q "SELECT name, size FROM funcs LIMIT 10"
+  idasql -s test.i64 -f queries.sql
+  idasql -s test.i64 -i
+  idasql -s test.i64 --export dump.sql
+  idasql -s test.i64 --http 8080
+  idasql -s sample.exe --http            # raw PE: idalib auto-analyzes, then serves SQL (default port 8080)
+  idasql -s firmware.bin -q "SELECT * FROM welcome"
+  idasql -s test.i64 --mcp 9000
+```
+
+**Key takeaway:** `-s` accepts either an existing IDA database **or** a raw binary. No
+manual `idat -A -B` / `ida -B` pre-step is needed — point `-s` straight at the
+`.exe`/`.dll`/firmware/etc. and idalib creates the database on first open.
 
 ---
 
-## Quick Start CLI (Do This First)
+## Additional Resources
 
-Use these commands first to avoid guessing behavior or schema:
+- Canonical schema catalog: [references/schema-catalog.md](references/schema-catalog.md)
+- CLI reference, REPL commands, server modes, runtime controls: [references/cli-reference.md](references/cli-reference.md)
+  (includes `.pin` autostart: the IDA plugin can auto-start a pinned HTTP/MCP server when a database is opened)
+- Optimization quality gate: [references/optimization-checklist.md](references/optimization-checklist.md)
+- HTTP server guide: [references/server-guide.md](references/server-guide.md)
 
-```bash
-# Single query
-idasql -s database.i64 -q "SELECT * FROM welcome"
+---
 
-# Interactive REPL
-idasql -s database.i64 -i
+## Quick Start Guardrails
 
-# Long-lived HTTP server for iterative analysis
-idasql -s database.i64 --http 8081
-
-# Query over HTTP
-curl -X POST http://127.0.0.1:8081/query -d "SELECT name, size FROM funcs LIMIT 5"
-```
-
-Critical guardrails:
-- Always provide `-s <db>` (`.idb` / `.i64`).
-- Use `--write` when you want edits persisted on exit.
+- Always provide `-s <file>`. The file can be either an IDA database
+  (`.idb` / `.i64`) **or** a raw binary (`.exe`, `.dll`, firmware blob,
+  etc.) — raw binaries trigger fresh idalib auto-analysis and string-list
+  rebuild. Do **not** pre-create an IDB with `idat -A -B`;
+  `idasql -s raw.exe` does it in one shot.
+- If `idasql -s legacy.idb ...` exits with code `3` and stdout JSON containing
+  `{"status":"upgraded","reopen_with":"..."}`, repeat the same requested
+  operation with `-s <reopen_with>`. Server modes exit before binding in this
+  case.
+- Use `--write` when you want edits persisted on exit, including HTTP/MCP server shutdown.
+- SQL inputs to `-q`, HTTP `/query`, MCP `idasql_query`, and plugin CLI
+  may be one statement or a semicolon-separated script. Semicolons inside
+  quoted strings are safe.
+- **All `/query` responses use the canonical script envelope** — single
+  statement = array of one:
+  `{success, statement_count, results:[{statement_index, success,
+  columns, rows, row_count, elapsed_ms, error}], row_count_total,
+  elapsed_ms_total, first_error_index}`.
+  Fail-fast is the default; pass `continue_on_error=true` (HTTP query
+  string or MCP arg) to run every statement regardless of earlier
+  failures.
 - Discover schema before writing queries:
   - REPL: `.schema <table>`
-  - SQL: `PRAGMA table_xinfo(<table>);` (or `PRAGMA table_info(<table>);`)
+  - SQL: `PRAGMA table_xinfo(<table>);`
 - Start orientation with `SELECT * FROM welcome;`.
 
 ---
 
-## Schema Catalog (Canonical)
+## Schema Catalog
 
-Canonical table/view formats live in `references/schema-catalog.md`.
-
-- Source of truth for column shapes and owner skill mapping.
-- Sourced from SQL metadata (`pragma_table_list` + `pragma_table_xinfo`).
-- Use this before assuming column names for less-common surfaces.
-- Legacy parity tracker: `references/legacy-parity-matrix.md`
-- Optimization quality gate: `references/optimization-checklist.md`
-
-Manual refresh:
-1. `SELECT schema, name, type, ncol FROM pragma_table_list WHERE schema='main' ORDER BY type, name;`
-2. `PRAGMA table_xinfo(<surface>);`
-3. Update `references/schema-catalog.md` owner mapping when surfaces change.
+Canonical column shapes and owner-skill mapping live in
+`references/schema-catalog.md`. Sourced from `pragma_table_list` +
+`pragma_table_xinfo`. Use it before assuming column names for
+less-common surfaces.
 
 ---
 
@@ -67,7 +103,11 @@ Manual refresh:
 
 Use this exact startup flow before deep analysis:
 
-1. Connect to database (`-s`, `-i`, or `--http`).
+1. Connect to database (`-s`, `-i`, or `--http`). `-s` accepts either an existing IDB
+   (`.idb`/`.i64`) or a raw binary (`.exe`/`.dll`/firmware/etc.) — never pre-build an
+   IDB with `idat`; let `idasql -s raw.exe` do it.
+   If a legacy `.idb` upgrades and returns `status:"upgraded"`, restart with the
+   JSON `reopen_with` path before running orientation.
 2. Run orientation query:
 ```sql
 SELECT * FROM welcome;
@@ -84,8 +124,6 @@ PRAGMA table_xinfo(funcs);
 PRAGMA table_xinfo(xrefs);
 ```
 5. Route to domain skill using routing matrix below.
-
-Never skip steps 2-4 when the user prompt is broad or ambiguous.
 
 ---
 
@@ -110,6 +148,8 @@ These contracts apply across all idasql skills and should be treated as one shar
 ### Performance Contract
 - Always constrain high-cost surfaces (`xrefs`, `instructions`, `ctree*`, `pseudocode`) by key columns.
 - For decompiler surfaces, enforce `func_addr = X` unless explicitly asked for broad scans.
+- For raw dirtree browsing, prefer `tree = ?` plus `path`, `path LIKE`, or `parent_path`; for normal organization use `funcs.folder_path` and `types.folder_path`.
+- `dirtree_entries` is read-only diagnostics. Recursive folder delete and raw recovery/link operations are intentionally not SQL surfaces.
 
 ### Failure Recovery Contract
 - On `no such table/column`: introspect schema and retry.
@@ -126,6 +166,7 @@ Use this deterministic mapping for initial routing:
 |-------------|---------------|---------------------|
 | "what does this binary do?" / triage | `analysis` | `SELECT * FROM entries;` |
 | disassembly, segments, instructions | `disassembly` | `SELECT * FROM funcs LIMIT 20;` |
+| function/type folders, review buckets, folder lifecycle | `annotations` / `types` | `SELECT address, name, folder_path FROM funcs WHERE folder_path LIKE 'idasql/%';` |
 | xrefs/callers/callees/import dependencies | `xrefs` | `SELECT * FROM xrefs WHERE to_ea = ...;` |
 | find functions/types/labels/members by name pattern | `grep` | `SELECT name, kind, address FROM grep WHERE pattern = 'main' LIMIT 20;` |
 | strings/bytes/pattern search | `data` | `SELECT * FROM strings LIMIT 20;` |
@@ -189,6 +230,7 @@ This is metadata-only and not a replacement for UI context capture.
 | Column | Type | Description |
 |--------|------|-------------|
 | `summary` | TEXT | One-line database summary |
+| `idasql_version` | TEXT | IDASQL build version (from `idasql_version.hpp`) |
 | `processor` | TEXT | Processor/module name |
 | `is_64bit` | INT | 1=64-bit database, 0=32-bit |
 | `min_ea` | TEXT | Minimum address in database |
@@ -198,9 +240,20 @@ This is metadata-only and not a replacement for UI context capture.
 | `funcs_count` | INT | Number of detected functions |
 | `segments_count` | INT | Number of segments |
 | `names_count` | INT | Number of named addresses |
+| `strings_count` | INT | Current IDA string-list count |
+| `filename` | TEXT | Bare input filename (no path) |
+| `input_file_path` | TEXT | Original input file path recorded in the IDB |
+| `idb_path` | TEXT | On-disk path of the IDB/I64 (may differ if moved) |
+| `md5` | TEXT | Lowercase hex MD5 of the input file (empty if unavailable) |
+| `sha256` | TEXT | Lowercase hex SHA-256 of the input file (empty if unavailable) |
+
+Use `filename`, `idb_path`, `md5`, or `sha256` to confirm which binary/instance
+this connection is bound to.
 
 ```sql
 SELECT * FROM welcome;
+SELECT filename, idb_path, md5, sha256 FROM welcome;
+SELECT idasql_version, filename, idb_path, md5, sha256 FROM welcome;
 ```
 
 For canonical schema and owner mapping, see `references/schema-catalog.md`.
@@ -234,12 +287,21 @@ Address-taking SQL functions accept:
 - numeric strings (`'4198400'`, `'0x401000'`)
 - symbol names resolved with `get_name_ea(BADADDR, name)` (global names)
 
+Most table predicates should compare address columns to integer EAs such as
+`address = 0x401000`. `applied_types.address` is an intentional exception for
+equality filters/writes: it also accepts numeric strings and symbol names so
+type application can target names directly.
+
 Examples:
 ```sql
 SELECT decompile('DriverEntry');
-SELECT set_type('DriverEntry', 'NTSTATUS DriverEntry(PDRIVER_OBJECT, PUNICODE_STRING);');
-SELECT comment_at('0x401000');
+UPDATE applied_types
+SET decl = 'NTSTATUS DriverEntry(PDRIVER_OBJECT, PUNICODE_STRING);'
+WHERE address = 'DriverEntry';
+SELECT (SELECT comment FROM comments WHERE address = 0x401000 LIMIT 1);
 ```
+
+Read address comments from the `comments` table after resolving the target EA.
 
 If a symbol cannot be resolved, SQL functions return an explicit error like:
 `Could not resolve name to address: <name>`.
@@ -338,7 +400,9 @@ WHERE itype IN (16, 18)  -- x86 call opcodes
 SELECT address FROM funcs ORDER BY RANDOM() LIMIT 1;
 
 -- FAST: O(1) - direct index access
-SELECT func_at_index(ABS(RANDOM()) % func_qty());
+SELECT address
+FROM funcs
+WHERE rowid = ABS(RANDOM()) % (SELECT COUNT(*) FROM funcs);
 ```
 
 ### CTE-First Mutation Workflow
@@ -367,7 +431,7 @@ This keeps mutation scope explicit and predictable for both humans and agents.
 
 | Goal | Table/Function |
 |------|----------------|
-| List all functions | `funcs` |
+| List all functions | `funcs` (cols: `address`, `name`, `end_ea`, `prototype`, `flags`, …) → `disassembly` |
 | Functions by return type | `funcs WHERE return_is_integral = 1` |
 | Functions by arg count | `funcs WHERE arg_count >= N` |
 | Void functions | `funcs WHERE return_is_void = 1` |
@@ -375,11 +439,13 @@ This keeps mutation scope explicit and predictable for both humans and agents.
 | Functions by calling convention | `funcs WHERE calling_conv = 'fastcall'` |
 | Find who calls what | `xrefs` with `is_code = 1` |
 | Find data references | `xrefs` with `is_code = 0` |
-| Analyze imports | `imports` |
-| Find strings | `strings` |
+| Analyze imports | `imports` (cols: `address`, `name`, `ordinal`, `module`) → `xrefs` / `analysis` |
+| Find strings | `strings` (cols: `address`, `length`, `content`) → `data` |
 | Configure string types | `rebuild_strings(types, minlen)` |
 | Instruction analysis | `instructions WHERE func_addr = X` |
 | Recreate deleted instructions | `make_code(addr)`, `make_code_range(start, end)` |
+| Apply/clear address type declarations | `applied_types` (`INSERT`, `UPDATE decl`, `DELETE`) |
+| Apply/clear call-site prototypes | `UPDATE disasm_calls SET callee_type = ... WHERE ea = X` |
 | Create function at EA | `INSERT INTO funcs(address) VALUES (...)` |
 | View function disassembly | `disasm_func(addr)` or `disasm_range(start, end)` |
 | View decompiled code | `decompile(addr)` |
@@ -400,18 +466,17 @@ This keeps mutation scope explicit and predictable for both humans and agents.
 | Hidden pointer types | `types_func_args WHERE is_ptr = 0 AND is_ptr_resolved = 1` |
 | Manage breakpoints | `breakpoints` (full CRUD) |
 | Modify segments | `segments` (INSERT/UPDATE/DELETE) |
-| Rename decompiler labels | `rename_label(...)` or `UPDATE ctree_labels SET name=...` |
+| Rename decompiler labels | `UPDATE ctree_labels SET name=... WHERE func_addr=... AND label_num=...` |
 | Delete instructions | `instructions` (DELETE converts to unexplored bytes) |
 | Recreate instructions | `make_code`, `make_code_range` |
 | Bulk patch from file bytes | `load_file_bytes(path, file_offset, address, size[, patchable])` |
-| EA to physical offset mapping | `bytes.fpos` (`NULL` means unmapped) |
+| EA to physical offset mapping | `bytes.fpos` on mapped byte rows (`NULL` means no file offset) |
 | Create types | `types` (INSERT struct/union/enum) |
 | Add struct members | `types_members` (INSERT) |
 | Add enum values | `types_enum_values` (INSERT) |
 | Modify database | `funcs`, `names`, `comments`, `bookmarks` (INSERT/UPDATE/DELETE) |
 | Store custom key-value data | `netnode_kv` (full CRUD, persists in IDB) |
 | Entity search (structured) | `grep` skill + `grep WHERE pattern = '...'` |
-| Entity search (JSON) | `grep` skill + `grep('pattern', limit, offset)` |
 
 **Remember:** Always use `func_addr = X` constraints on instruction and decompiler tables for acceptable performance.
 
@@ -421,5 +486,5 @@ This keeps mutation scope explicit and predictable for both humans and agents.
 
 - **No Hex-Rays license:** Decompiler tables (`pseudocode`, `ctree*`, `ctree_lvars`) will be empty or unavailable
 - **No constraint on decompiler tables:** Query will be extremely slow (decompiles all functions)
-- **Invalid address:** Functions like `func_at(addr)` return NULL
+- **Invalid address:** Containing-function table lookups return no row; use a scalar subquery when you need a nullable scalar result
 - **Missing function:** JOINs may return fewer rows than expected

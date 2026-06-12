@@ -11,7 +11,7 @@ needed:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab \
-  /opt/ida-pro-9.3/idasql -s /workspace/<db>.i64 -q "SELECT * FROM welcome;"
+  /opt/ida-pro/idasql -s /workspace/<db>.i64 -q "SELECT * FROM welcome;"
 ```
 
 For iterative analysis, start a long-lived HTTP server once and query it
@@ -19,7 +19,7 @@ repeatedly (avoids per-query docker-exec overhead):
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec -d neo-rev-lab \
-  /opt/ida-pro-9.3/idasql -s /workspace/<db>.i64 --http 8081
+  /opt/ida-pro/idasql -s /workspace/<db>.i64 --http 8081
 
 docker exec neo-rev-lab curl -s http://127.0.0.1:8081/query \
   -d "SELECT * FROM welcome;"
@@ -54,7 +54,7 @@ discovery commands at the end of this section before assuming the list is
 stale.
 
 Disassembly / decompilation:
-- `idasql` — IDA Pro 9.3 SQL frontend (`/opt/ida-pro-9.3`, also at `/opt/ida-pro`)
+- `idasql` — IDA Pro SQL frontend (`/opt/ida-pro`, version-independent install path)
 - `r2`, `radare2` — radare2 6.1.4 (`/usr/bin/`)
 
 Java decompilers (the four-decompiler ladder — pick per artifact):

@@ -5,14 +5,14 @@ Standard REST API that works with curl, Python, any HTTP client, or LLM tools.
 ## Starting the Server
 
 ```bash
-# Default port 8081
+# Default port 8080
 idasql -s database.i64 --http
 
 # Custom port and bind address
 idasql -s database.i64 --http 9000 --bind 0.0.0.0
 
 # With authentication
-idasql -s database.i64 --http 8081 --token mysecret
+idasql -s database.i64 --http 8080 --token mysecret
 ```
 
 ## HTTP Endpoints
@@ -21,7 +21,7 @@ idasql -s database.i64 --http 8081 --token mysecret
 |----------|--------|------|-------------|
 | `/` | GET | No | Welcome message |
 | `/help` | GET | No | API documentation (for LLM discovery) |
-| `/query` | POST | Yes* | Execute SQL (body = raw SQL) |
+| `/query` | POST | Yes* | Execute SQL query or semicolon-separated script (body = raw SQL) |
 | `/status` | GET | Yes* | Health check |
 | `/shutdown` | POST | Yes* | Stop server |
 
@@ -31,18 +31,21 @@ idasql -s database.i64 --http 8081 --token mysecret
 
 ```bash
 # Get API documentation
-curl http://localhost:8081/help
+curl http://localhost:8080/help
 
 # Execute SQL query
-curl -X POST http://localhost:8081/query -d "SELECT name, size FROM funcs LIMIT 5"
+curl -X POST http://localhost:8080/query -d "SELECT name, size FROM funcs LIMIT 5"
+
+# Execute a short SQL script
+curl -X POST http://localhost:8080/query -d "SELECT * FROM welcome; SELECT COUNT(*) FROM funcs;"
 
 # With authentication
-curl -X POST http://localhost:8081/query \
+curl -X POST http://localhost:8080/query \
      -H "Authorization: Bearer mysecret" \
      -d "SELECT * FROM funcs"
 
 # Check status
-curl http://localhost:8081/status
+curl http://localhost:8080/status
 ```
 
 ## Python Automation Patterns
@@ -52,7 +55,7 @@ Use `curl` for quick/manual queries. Use a short Python script when you need loo
 ```python
 import requests
 
-URL = "http://127.0.0.1:8081/query"
+URL = "http://127.0.0.1:8080/query"
 HEADERS = {}  # If --token is enabled: {"Authorization": "Bearer mysecret"}
 
 def post_sql(sql: str):
@@ -70,12 +73,17 @@ def post_sql(sql: str):
 # Pattern 1: single query
 rows = post_sql("SELECT name, size FROM funcs LIMIT 5").get("rows", [])
 print(rows)
+
+# Pattern 1b: semicolon-separated script
+script_payload = post_sql("SELECT * FROM welcome; SELECT COUNT(*) FROM funcs;")
+for statement in script_payload.get("statements", []):
+    print(statement.get("columns", []), statement.get("rows", []))
 ```
 
 ```python
 import requests
 
-URL = "http://127.0.0.1:8081/query"
+URL = "http://127.0.0.1:8080/query"
 HEADERS = {}  # If --token is enabled: {"Authorization": "Bearer mysecret"}
 
 def post_sql(sql: str):
@@ -116,7 +124,7 @@ print(f"Verified rows: {len(check.get('rows', []))}")
 ```python
 import requests
 
-URL = "http://127.0.0.1:8081/query"
+URL = "http://127.0.0.1:8080/query"
 
 def post_sql(sql: str):
     r = requests.post(URL, data=sql, timeout=30)
@@ -151,8 +159,16 @@ This same pattern works in any language with HTTP support (JavaScript, PowerShel
 
 ## Response Format (JSON)
 
+Single statements keep the standard response shape:
+
 ```json
 {"success": true, "columns": ["name", "size"], "rows": [["main", "500"]], "row_count": 1}
+```
+
+Semicolon-separated scripts return one result object per statement:
+
+```json
+{"success": true, "statements": [{"columns": ["summary"], "rows": [["..."]], "row_count": 1}, {"columns": ["COUNT(*)"], "rows": [["42"]], "row_count": 1}], "statement_count": 2}
 ```
 
 ```json
@@ -163,5 +179,7 @@ This same pattern works in any language with HTTP support (JavaScript, PowerShel
 
 - Most builds include `success` in both success and error responses.
 - Some builds may omit `success` on successful responses and return only `columns`, `rows`, and `row_count`.
+- Multi-statement support is additive: clients that only send one SQL statement can continue to read top-level `rows`.
+- Clients that send scripts must read `statements[]`; each entry has its own `columns`, `rows`, and `row_count`.
 - Invalid/non-UTF8 bytes in query results are escaped in JSON-safe form (for example `\u0097`) rather than crashing the response.
 - In clients, check for `error` first, then consume rows with `payload.get("rows", [])` to avoid `KeyError`.
