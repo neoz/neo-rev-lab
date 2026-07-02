@@ -35,23 +35,23 @@ try {
     git clone --depth 1 --quiet $RepoUrl (Join-Path $TmpDir 'repo')
     if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
 
-    # -- 3. Create .mcp.json -----------------------------------------------
-    $McpJson = @"
-{
-  "mcpServers": {
-    "ida-mcp": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i", "--name", "neo-rev-lab", "-v", "./workspace:/workspace", "$DockerImage"]
-    },
-    "dotnet-mcp": {
-      "command": "docker",
-      "args": ["exec", "-i", "neo-rev-lab", "/opt/dotnet-mcp/MCPPOC"]
+    # -- 3. Copy .mcp.json from repo (rewrite dev image -> published image) -
+    # The repo's .mcp.json is the single source of truth for the MCP server
+    # list. It references the locally-built image tag "neo-rev-lab"; for a
+    # bootstrapped workspace we swap that for the published $DockerImage so a
+    # fresh machine can pull it. Only the `docker run` image (followed by `]`)
+    # is rewritten -- the `--name`/`exec` container name stays "neo-rev-lab".
+    $RepoMcp = Join-Path $TmpDir 'repo\.mcp.json'
+    if (Test-Path $RepoMcp) {
+        $McpJson = (Get-Content -Raw $RepoMcp) -replace '"neo-rev-lab"\]', "`"$DockerImage`"]"
+        Set-Content -Path (Join-Path $Target '.mcp.json') -Value $McpJson -Encoding utf8
+        if ($McpJson -notmatch [regex]::Escape($DockerImage)) {
+            Write-Host "[!] WARNING: could not rewrite image reference in .mcp.json - verify it manually"
+        }
+        Write-Host "[+] .mcp.json (from repo)"
+    } else {
+        Write-Host "[!] WARNING: .mcp.json not found in repo"
     }
-  }
-}
-"@
-    Set-Content -Path (Join-Path $Target '.mcp.json') -Value $McpJson -Encoding utf8
-    Write-Host "[+] .mcp.json"
 
     # -- 4. Copy CLAUDE.md from repo ---------------------------------------
     $RepoClaudeMd = Join-Path $TmpDir 'repo\CLAUDE.md'

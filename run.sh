@@ -29,22 +29,21 @@ trap 'rm -rf "$TMPDIR"' EXIT
 echo "[*] Fetching resources from $REPO_URL ..."
 git clone --depth 1 --quiet "$REPO_URL" "$TMPDIR/repo"
 
-# ── 3. Create .mcp.json ───────────────────────────────────────────────────
-cat > "$TARGET/.mcp.json" << MCP_EOF
-{
-  "mcpServers": {
-    "ida-mcp": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i", "--name", "neo-rev-lab", "-v", "./workspace:/workspace", "$DOCKER_IMAGE"]
-    },
-    "dotnet-mcp": {
-      "command": "docker",
-      "args": ["exec", "-i", "neo-rev-lab", "/opt/dotnet-mcp/MCPPOC"]
-    }
-  }
-}
-MCP_EOF
-echo "[+] .mcp.json"
+# ── 3. Copy .mcp.json from repo (rewrite dev image → published image) ──────
+# The repo's .mcp.json is the single source of truth for the MCP server list.
+# It references the locally-built image tag "neo-rev-lab"; for a bootstrapped
+# workspace we swap that for the published $DOCKER_IMAGE so a fresh machine can
+# pull it. Only the `docker run` image (followed by `]`) is rewritten — the
+# `--name`/`exec` container name stays "neo-rev-lab".
+if [ -f "$TMPDIR/repo/.mcp.json" ]; then
+  sed "s#\"neo-rev-lab\"]#\"$DOCKER_IMAGE\"]#" "$TMPDIR/repo/.mcp.json" > "$TARGET/.mcp.json"
+  if ! grep -q "$DOCKER_IMAGE" "$TARGET/.mcp.json"; then
+    echo "[!] WARNING: could not rewrite image reference in .mcp.json - verify it manually"
+  fi
+  echo "[+] .mcp.json (from repo)"
+else
+  echo "[!] WARNING: .mcp.json not found in repo"
+fi
 
 # ── 4. Copy CLAUDE.md from repo ───────────────────────────────────────────
 if [ -f "$TMPDIR/repo/CLAUDE.md" ]; then
