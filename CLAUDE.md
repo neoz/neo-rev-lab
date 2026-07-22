@@ -11,7 +11,7 @@ needed:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker exec neo-rev-lab \
-  /opt/ida-pro/idasql -s /workspace/<db>.i64 -q "SELECT * FROM welcome;"
+  /opt/ida-pro/idasql -s /workspace/<db>.i64 -q "SELECT * FROM binary;"
 ```
 
 For iterative analysis, start a long-lived HTTP server once and query it
@@ -22,7 +22,7 @@ MSYS_NO_PATHCONV=1 docker exec -d neo-rev-lab \
   /opt/ida-pro/idasql -s /workspace/<db>.i64 --http 8081
 
 docker exec neo-rev-lab curl -s http://127.0.0.1:8081/query \
-  -d "SELECT * FROM welcome;"
+  -d "SELECT * FROM binary;"
 ```
 
 Notes:

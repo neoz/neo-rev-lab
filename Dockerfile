@@ -60,13 +60,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #     && rm /tmp/dotnet-install.sh
 
 # ---------- Install IDA Pro ----------
-COPY tools/ida/ida-pro_93_x64linux.run /tmp/ida-installer.run
+COPY tools/ida/ida-pro_94_x64linux.run /tmp/ida-installer.run
 RUN chmod +x /tmp/ida-installer.run \
     && /tmp/ida-installer.run --mode unattended --prefix ${IDADIR} \
     && rm /tmp/ida-installer.run
 
 # ---------- Patch IDA + generate license via keygen.js ----------
-COPY tools/ida/kg_patch/kg_patch/keygen.js /opt/ida-pro/keygen.js
+COPY tools/ida/kg_patch/9.4/keygen.js /opt/ida-pro/keygen.js
 RUN cd /opt/ida-pro && bun run keygen.js
 
 # ---------- Install idasql ----------
