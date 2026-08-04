@@ -106,8 +106,29 @@ finally {
     }
 }
 
+# -- 7. Pull the Docker image ----------------------------------------------
+# The image is large; pulling here (instead of leaving it to the first MCP
+# server start) keeps Claude Code from stalling on its first tool call.
+# Non-fatal: a fresh `docker run` would pull it anyway.
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+    Write-Host "[*] Pulling $DockerImage ..."
+    try {
+        docker pull $DockerImage
+        $PullOk = ($LASTEXITCODE -eq 0)
+    } catch {
+        $PullOk = $false
+    }
+    if ($PullOk) {
+        Write-Host "[+] Docker image ready"
+    } else {
+        Write-Host "[!] WARNING: docker pull failed - the ida-mcp server will retry on first use"
+    }
+} else {
+    Write-Host "[!] WARNING: docker not found on PATH - skipping image pull"
+}
+
 Write-Host ""
 Write-Host "Done! To start working:"
 Write-Host "  1. Place your binaries in $Target\workspace\"
 Write-Host "  2. Run 'claude' from $Target\"
-Write-Host "  3. The ida-mcp server pulls $DockerImage automatically via Docker"
+Write-Host "  3. The ida-mcp server runs $DockerImage via Docker"

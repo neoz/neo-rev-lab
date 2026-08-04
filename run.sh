@@ -85,8 +85,23 @@ else
   echo "[=] .gitignore already exists, skipping"
 fi
 
+# ── 7. Pull the Docker image ──────────────────────────────────────────────
+# The image is large; pulling here (instead of leaving it to the first MCP
+# server start) keeps Claude Code from stalling on its first tool call.
+# Non-fatal: a fresh `docker run` would pull it anyway.
+if command -v docker > /dev/null 2>&1; then
+  echo "[*] Pulling $DOCKER_IMAGE ..."
+  if docker pull "$DOCKER_IMAGE"; then
+    echo "[+] Docker image ready"
+  else
+    echo "[!] WARNING: docker pull failed - the ida-mcp server will retry on first use"
+  fi
+else
+  echo "[!] WARNING: docker not found on PATH - skipping image pull"
+fi
+
 echo ""
 echo "Done! To start working:"
 echo "  1. Place your binaries in $TARGET/workspace/"
 echo "  2. Run 'claude' from $TARGET/"
-echo "  3. The ida-mcp server pulls $DOCKER_IMAGE automatically via Docker"
+echo "  3. The ida-mcp server runs $DOCKER_IMAGE via Docker"
