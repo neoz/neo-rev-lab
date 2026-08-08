@@ -118,7 +118,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
         git+https://github.com/bongtrop/hbctool.git
 
 # ---------- Install Radare2 (prebuilt .deb from radareorg) + r2pipe Python bindings ----------
-ARG RADARE2_VERSION=6.1.4
+ARG RADARE2_VERSION=6.2.0
 RUN curl -fsSL -o /tmp/radare2.deb \
       "https://github.com/radareorg/radare2/releases/download/${RADARE2_VERSION}/radare2_${RADARE2_VERSION}_amd64.deb" \
     && apt-get update \
