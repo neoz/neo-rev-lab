@@ -55,7 +55,7 @@ stale.
 
 Disassembly / decompilation:
 - `idasql` — IDA Pro SQL frontend (`/opt/ida-pro`, version-independent install path)
-- `r2`, `radare2` — radare2 6.1.4 (`/usr/bin/`)
+- `r2`, `radare2` — radare2 (`/usr/bin/`)
 
 Java decompilers (the four-decompiler ladder — pick per artifact):
 - `jadx` — `/opt/jadx/jadx.jar` (shim `/usr/local/bin/jadx`)
