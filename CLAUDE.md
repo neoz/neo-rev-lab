@@ -1,5 +1,17 @@
 # CLAUDE.md
 
+## Field journal — read before, write after
+
+Before starting a binary-analysis task, check
+`.claude/skills/field-journal/_index.md` for a prior case with the same target
+type or toolchain. If one exists, read that entry and reuse the verified
+approach. If it does not apply, record why in the new entry.
+
+After finishing a case — target understood, patch produced, flag captured, or
+analysis abandoned — invoke the `field-journal` skill: write the entry, then
+carry out the evolution actions it lists. Updating `_index.md` is mandatory;
+the other actions apply only when the case actually revealed something.
+
 ## idasql must run inside the Docker container
 
 `idasql` is not installed on the host. It runs inside the `neo-rev-lab` Docker
