@@ -8,9 +8,10 @@ type or toolchain. If one exists, read that entry and reuse the verified
 approach. If it does not apply, record why in the new entry.
 
 After finishing a case — target understood, patch produced, flag captured, or
-analysis abandoned — invoke the `field-journal` skill: write the entry, then
-carry out the evolution actions it lists. Updating `_index.md` is mandatory;
-the other actions apply only when the case actually revealed something.
+analysis abandoned — invoke the `field-journal` skill and write the entry. The
+skill writes only the entry and `_index.md`; every change it proposes to
+CLAUDE.md, other skills, the Dockerfile, or `tools/scripts/` is a
+recommendation, applied only when I ask.
 
 ## idasql must run inside the Docker container
 
