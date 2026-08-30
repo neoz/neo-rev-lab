@@ -1,6 +1,6 @@
 ---
 name: field-journal
-description: "Use when starting a binary-analysis case in this repo, to look up prior work on the same target family or toolchain; and when finishing one — target understood, patch produced, flag captured, or analysis abandoned. Trigger on 'write a field journal', 'log this case', 'record what we learned', 'lessons learned', 'check past experience', 'have we hit this before', 'update the journal', or at the end of any completed idasql / IDA / r2 / angr / APK / Java / Delphi analysis in this repo."
+description: "Use when starting any reverse-engineering or binary-analysis case in this repo, to look up prior work on the same target family, toolchain, or technique; and when finishing one — target understood, patch produced, flag captured, or analysis abandoned. Covers every target format (PE, ELF, Mach-O, APK, JAR, bytecode, firmware, packed or obfuscated builds) and every toolchain — disassembler, decompiler, symbolic execution, unpacker, emulator, debugger, or a tool named nowhere in this repo. Trigger on 'write a field journal', 'log this case', 'record what we learned', 'lessons learned', 'check past experience', 'have we hit this before', 'update the journal'."
 metadata:
   argument-hint: "[read | write] [case-slug]"
 allowed-tools:
@@ -47,6 +47,29 @@ where this skill stops.
    in the new entry; that negative result is itself worth recording.
 5. If `_index.md` has no relevant entry, proceed normally and say so briefly.
 
+## Vocabulary
+
+`category`, `tools`, and `techniques` are open vocabularies. The live list is
+the set of sub-headings already in `_index.md`, and that is the only place any
+of them is enumerated. Nothing here, in `_template.md`, or in `CLAUDE.md`
+restricts which case this skill covers — a target format, packer, language,
+or tool absent from every list in this repo is still in scope, and its
+absence is itself worth recording.
+
+Choosing a term:
+
+1. Read the sub-headings in `_index.md`. Reuse one that fits.
+2. If none fits, coin one. This is a normal outcome, not a gap to report —
+   a target or tool the repo has not met before has no heading yet by
+   definition.
+3. Coin the narrowest term a future case would independently arrive at: the
+   tool's own command name as invoked, the format plus the toolchain that
+   made it (`pe-mfc`, `elf-rust`), the manoeuvre rather than its outcome
+   (`vmt-recovery`, `xref-pivot`).
+4. Do not coin a term that differs from an existing one only in wording. A
+   second heading for the same thing splits the index and hides the earlier
+   case from the read half — the exact failure this journal exists to prevent.
+
 ## Write half — after finishing a case
 
 A case is finishable in any of these states: target understood, patch
@@ -56,9 +79,8 @@ information most expensive to rediscover.
 
 1. Choose a slug: `entries/YYYY-MM-DD_<short-kebab-slug>.md`. Date the day the
    work happened, not the day of writing.
-2. Copy `_template.md` and fill its frontmatter. Keep `tools` and `techniques`
-   to terms already used in `_index.md` where one fits; introduce a new term
-   only when nothing existing matches.
+2. Copy `_template.md` and fill its frontmatter, choosing `category`, `tools`,
+   and `techniques` by the rule in **Vocabulary** below.
 3. Fill the body. The **Execution chain** must include dead ends and reverted
    attempts — a clean narrative of only the winning path discards most of the
    entry's value.

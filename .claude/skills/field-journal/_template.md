@@ -1,10 +1,10 @@
 ---
 date: YYYY-MM-DD
 title:
-category:            # pe-delphi | apk | java | native-elf | firmware | ctf | toolchain | other
+category:            # reuse a sub-heading from _index.md, or coin one
 target:
-tools: []            # idasql, r2, angr, jadx, apktool, delphi-reverser, ...
-techniques: []       # vmt-recovery, string-scan, ssl-unpinning, ...
+tools: []            # command names as actually invoked
+techniques: []       # reuse sub-headings from _index.md, or coin them
 outcome:             # solved | partial | blocked
 ---
 
@@ -33,7 +33,7 @@ outcome:             # solved | partial | blocked
 ## Toolchain findings
 
 <!-- Which tools worked, which had traps, version incompatibilities.
-     Record the exact invocation, not "used r2". -->
+     Record the exact invocation, not the tool's name on its own. -->
 
 ## Reusable commands / snippets
 
@@ -41,24 +41,34 @@ outcome:             # solved | partial | blocked
 
 ```
 
-## Evolution actions
+## Recommended evolution actions
 
-<!-- Tick only what this case actually revealed. `_index.md` is always ticked. -->
+<!-- Recommendations only. Writing this entry and updating `_index.md` are the
+     only edits this skill makes; the user applies everything below.
+     Candidate surfaces: CLAUDE.md "Installed tool catalog" (new or stale
+     tool), CLAUDE.md container conventions (invocation trap),
+     .claude/skills/<name>/SKILL.md (procedure wrong), .../references/*.md
+     (searched knowledge worth keeping), Dockerfile (tool to add to the image),
+     tools/scripts/* (script needing a fix).
+     If the case revealed nothing, write "None." and delete the block below —
+     an invented recommendation is worse than an empty section. -->
 
-- [ ] CLAUDE.md -> "Installed tool catalog"    (new tool, or catalog now stale)
-- [ ] CLAUDE.md -> container conventions       (newly discovered invocation trap)
-- [ ] .claude/skills/<name>/SKILL.md           (procedure wrong or missing a step)
-- [ ] .claude/skills/<name>/references/*.md    (searched knowledge worth keeping)
-- [ ] Dockerfile                               (tool to add to the image)
-- [ ] tools/scripts/*                          (script needing a fix)
-- [ ] _index.md                                (MANDATORY)
-- [ ] No update needed
+### 1. <exact path> -> <heading inside it>
+
+**Change** (paste-ready):
+
+```text
+
+```
+
+- **Evidence:** execution-chain step <n>
+- **Cost of skipping:** <what the next session re-pays>
+- **Status:** proposed <!-- proposed | applied YYYY-MM-DD | declined -->
 
 ## Environment
 
 - Image / container:
-- IDA / idasql:
-- Other tool versions:
+- Tool versions: <!-- one line per tool in `tools`, with how it was reached -->
 - Target platform:
 
 ---
