@@ -4,8 +4,10 @@ Prior cases for this repo. Check this file **before** starting a
 binary-analysis task; write back to it **after** finishing one. Entries live
 in `entries/`; the procedure is in `SKILL.md`.
 
-Sub-headings below appear only once an entry uses them — do not pre-create
-empty ones.
+The sub-headings below **are** the vocabulary for `category`, `tools`, and
+`techniques` — no list is kept anywhere else. They appear only once an entry
+uses them: do not pre-create empty ones, and do not treat the current set as a
+limit on what a case may be.
 
 ## Stats
 
@@ -14,12 +16,6 @@ empty ones.
 
 ## By category
 
-<!-- pe-delphi | apk | java | native-elf | firmware | ctf | toolchain | other -->
-
 ## By tool
 
-<!-- idasql, r2, angr, jadx, apktool, delphi-reverser, ... -->
-
 ## By technique
-
-<!-- vmt-recovery, string-scan, ssl-unpinning, ... -->
