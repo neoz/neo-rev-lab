@@ -1,0 +1,9 @@
+# Allowlist: only send what the Dockerfile actually uses to the build context.
+*
+!tools/ida/ida-pro_*_x64linux.run
+!tools/ida/kg_patch/*/keygen.js
+!tools/idasql/idasql
+!tools/jadx/jadx.jar
+!tools/apktool/apktool.jar
+!tools/re-dotnet/re-dotnet
+!tools/scripts/delphi_reverser.py
