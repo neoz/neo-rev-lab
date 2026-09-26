@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "ida-mcp": {
+    "re-mcp": {
       "command": "docker",
       "args": ["run", "--rm", "-i", "--name", "neo-rev-lab","-v", "./workspace:/workspace", "neo-rev-lab"]
     },

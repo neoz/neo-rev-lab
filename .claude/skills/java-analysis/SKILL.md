@@ -1,6 +1,6 @@
 ---
 name: java-analysis
-description: "Reverse-engineer Java artifacts using static analysis only: a four-decompiler ladder (jadx → CFR → Procyon → Vineflower), plus unzip / strings / file / xxd / ripgrep, plus ida-mcp/idasql for any bundled JNI .so libraries. Handles plain JARs, fat/uber-jars (Spring Boot, Shadow), WAR/EAR server deployments, standalone .class files, and loose .dex outside an APK — first-class, not an afterthought. Use whenever the user wants to understand, audit, deobfuscate, or extract behavior from a Java archive: enumerating REST/Servlet endpoints, finding the Main-Class, mapping plugin SPI, hunting deserialization gadgets, dumping hardcoded secrets, or rebuilding a CLI's argument flow — even if they don't say the words 'reverse engineer'. Prefer this skill over generic binary-analysis skills for any task that starts from a .jar / .war / .ear / .class / .dex (non-APK) input. For .apk inputs, route to apk-find-api or apk-compare-versions instead."
+description: "Reverse-engineer Java artifacts using static analysis only: a four-decompiler ladder (jadx → CFR → Procyon → Vineflower), plus unzip / strings / file / xxd / ripgrep, plus re-mcp/idasql for any bundled JNI .so libraries. Handles plain JARs, fat/uber-jars (Spring Boot, Shadow), WAR/EAR server deployments, standalone .class files, and loose .dex outside an APK — first-class, not an afterthought. Use whenever the user wants to understand, audit, deobfuscate, or extract behavior from a Java archive: enumerating REST/Servlet endpoints, finding the Main-Class, mapping plugin SPI, hunting deserialization gadgets, dumping hardcoded secrets, or rebuilding a CLI's argument flow — even if they don't say the words 'reverse engineer'. Prefer this skill over generic binary-analysis skills for any task that starts from a .jar / .war / .ear / .class / .dex (non-APK) input. For .apk inputs, route to apk-find-api or apk-compare-versions instead."
 metadata:
   argument-hint: "<jar_or_war_or_class_path>"
 allowed-tools:
@@ -29,7 +29,7 @@ Tools actually available in this container (verified, not assumed):
 | `rg` (ripgrep) | docker | Fast in-container pattern sweep; the host-side Grep tool is still preferable on already-decompiled trees because it avoids per-call `docker exec` overhead |
 | `strings` | docker | Last-resort literal extraction from `.class` files when every decompiler fails |
 | `python3` | docker | Small extractors / `.class` parsers (the JDK ships only the JRE here, so see "Known gaps" below) |
-| `ida-mcp` + `idasql` | MCP + docker | Any JNI `.so` shipped inside the JAR's resources (some commercial Java libs ship native code under `META-INF/native/` or similar) |
+| `re-mcp` + `idasql` | MCP + docker | Any JNI `.so` shipped inside the JAR's resources (some commercial Java libs ship native code under `META-INF/native/` or similar) |
 | `Grep` / `Read` / `Glob` / `Bash` | Host | Pattern sweeps over decompiled output |
 
 Known gaps in this container (so the skill doesn't burn calls rediscovering them):

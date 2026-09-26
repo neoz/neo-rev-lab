@@ -121,7 +121,7 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
     if ($PullOk) {
         Write-Host "[+] Docker image ready"
     } else {
-        Write-Host "[!] WARNING: docker pull failed - the ida-mcp server will retry on first use"
+        Write-Host "[!] WARNING: docker pull failed - the re-mcp server will retry on first use"
     }
 } else {
     Write-Host "[!] WARNING: docker not found on PATH - skipping image pull"
@@ -131,4 +131,4 @@ Write-Host ""
 Write-Host "Done! To start working:"
 Write-Host "  1. Place your binaries in $Target\workspace\"
 Write-Host "  2. Run 'claude' from $Target\"
-Write-Host "  3. The ida-mcp server runs $DockerImage via Docker"
+Write-Host "  3. The re-mcp server runs $DockerImage via Docker"

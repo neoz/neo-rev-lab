@@ -94,7 +94,7 @@ if command -v docker > /dev/null 2>&1; then
   if docker pull "$DOCKER_IMAGE"; then
     echo "[+] Docker image ready"
   else
-    echo "[!] WARNING: docker pull failed - the ida-mcp server will retry on first use"
+    echo "[!] WARNING: docker pull failed - the re-mcp server will retry on first use"
   fi
 else
   echo "[!] WARNING: docker not found on PATH - skipping image pull"
@@ -104,4 +104,4 @@ echo ""
 echo "Done! To start working:"
 echo "  1. Place your binaries in $TARGET/workspace/"
 echo "  2. Run 'claude' from $TARGET/"
-echo "  3. The ida-mcp server runs $DOCKER_IMAGE via Docker"
+echo "  3. The re-mcp server runs $DOCKER_IMAGE via Docker"

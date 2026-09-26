@@ -76,10 +76,10 @@ On first launch, Claude Code will detect the `.mcp.json` configuration and promp
 
 | Server | Purpose |
 |---|---|
-| `ida-mcp` | IDA Pro decompiler, disassembly, xrefs, type analysis |
+| `re-mcp` | IDA Pro decompiler, disassembly, xrefs, type analysis |
 | `dotnet-mcp` | .NET assembly decompilation and inspection |
 
-The `ida-mcp` server starts the Docker container automatically. The `dotnet-mcp` server runs inside the same container via `docker exec`.
+The `re-mcp` server starts the Docker container automatically. The `dotnet-mcp` server runs inside the same container via `docker exec`.
 
 ### 4. Start reversing
 
@@ -152,7 +152,7 @@ Android analysis runs as skills driving the CLI tools (`jadx`, `apktool`, `herme
 
 | Skill | Trigger | What it does |
 |---|---|---|
-| `/apk-find-api` | Map an APK's API surface, list endpoints, reverse-engineer an API client | Static discovery of every endpoint an APK talks to (Retrofit / OkHttp / Ktor / RN fetch), including native `.so` libs via ida-mcp |
+| `/apk-find-api` | Map an APK's API surface, list endpoints, reverse-engineer an API client | Static discovery of every endpoint an APK talks to (Retrofit / OkHttp / Ktor / RN fetch), including native `.so` libs via re-mcp |
 | `/apk-compare-versions` | Diff two versions of the same APK, audit a version bump, investigate a release regression | Full delta between two APKs: permissions, exported components, SDK flags, endpoints, hardcoded secrets, SSL pinning, native libs, and the JS bundle for RN apps |
 
 Usage examples:
@@ -178,7 +178,7 @@ After running `run.sh`, your workspace looks like this:
 
 ## Notes
 
-- Only one `ida-mcp` container runs at a time. If the container is already running, Claude Code will reuse it for `dotnet-mcp` and for skill-driven CLI calls (`jadx`, `apktool`, `hermes-dec`, `hbctool`, `angr`) via `docker exec`.
+- Only one `re-mcp` container runs at a time. If the container is already running, Claude Code will reuse it for `dotnet-mcp` and for skill-driven CLI calls (`jadx`, `apktool`, `hermes-dec`, `hbctool`, `angr`) via `docker exec`.
 - IDA databases (`.i64`) are created alongside binaries in `workspace/` and persist between sessions.
 - The `angr` and `unicorn` Python libraries are pre-installed in the container for symbolic execution and emulation tasks.
 - `jadx`, `apktool`, `hermes-dec`, and `hbctool` are pre-installed on `PATH` inside the container for Android / React Native analysis.

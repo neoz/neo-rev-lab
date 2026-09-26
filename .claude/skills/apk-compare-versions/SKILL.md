@@ -23,7 +23,7 @@ Tools actually available (unchanged from `apk-find-api`):
 | `hermes-dec` (`hbc-decompiler`, `hbc-disassembler`) | docker | Decompile RN Hermes bytecode bundles |
 | `hbctool` | docker | Alternate Hermes backend (per-function disasm + string-table JSON) |
 | `unzip`, `diff`, `comm`, `sort`, `grep`, `head`, `wc`, `sed`, `awk`, `od`, `python3` | docker | Plumbing |
-| `ida-mcp` + `idasql` | MCP + docker | Optional: deep `.so` diff (only on user request) |
+| `re-mcp` + `idasql` | MCP + docker | Optional: deep `.so` diff (only on user request) |
 | `Grep` / `Read` / `Glob` / `Bash` | Host | Sweeps over decompiled output under the bind-mounted workspace |
 
 Known environment details (so runs don't waste calls rediscovering them):

@@ -1,6 +1,6 @@
 ---
 name: apk-find-api
-description: "Discover and document every API endpoint of an Android APK using static analysis only: jadx CLI, apktool, grep, plus ida-mcp/idasql for native .so libraries. Handles native Android (Retrofit/OkHttp/Ktor) AND React Native (Hermes/JSC) builds — the RN bundle case is first-class, not a fallback. Use whenever the user wants to map an app's API surface, find endpoints, enumerate Retrofit/OkHttp calls, reverse-engineer an API client, or list the URLs an APK talks to — even if they don't say the word 'API'. Prefer this skill over generic reverse-engineering skills for any task that starts from an APK file or Android package name."
+description: "Discover and document every API endpoint of an Android APK using static analysis only: jadx CLI, apktool, grep, plus re-mcp/idasql for native .so libraries. Handles native Android (Retrofit/OkHttp/Ktor) AND React Native (Hermes/JSC) builds — the RN bundle case is first-class, not a fallback. Use whenever the user wants to map an app's API surface, find endpoints, enumerate Retrofit/OkHttp calls, reverse-engineer an API client, or list the URLs an APK talks to — even if they don't say the word 'API'. Prefer this skill over generic reverse-engineering skills for any task that starts from an APK file or Android package name."
 metadata:
   argument-hint: "<apk_path_or_package_name>"
 allowed-tools:
@@ -22,7 +22,7 @@ Tools actually available:
 | `apktool` | `/usr/local/bin/apktool` (docker) | Fast manifest + resource extraction (lossless) |
 | `hermes-dec` (`hbc-decompiler`, `hbc-disassembler`) | docker (`pip`-installed from P1sec/hermes-dec) | Decompile Hermes RN bundles (`.hbc` / `index.android.bundle`) to pseudo-JS |
 | `hbctool` | docker (`pip`-installed from bongtrop/hbctool) | Alternate Hermes backend: per-function disassembly + string-table dump; useful when hermes-dec doesn't support the HBC version, or when only URL literals (not call sites) are needed |
-| `ida-mcp` + `idasql` | MCP + docker | Native `lib/*.so` endpoint discovery (strings, xrefs, imports) |
+| `re-mcp` + `idasql` | MCP + docker | Native `lib/*.so` endpoint discovery (strings, xrefs, imports) |
 | `Grep` / `Read` / `Glob` / `Bash` | Host | Pattern sweeps over decompiled output |
 
 Known gaps in this container (so skill runs don't waste calls rediscovering them):
@@ -404,7 +404,7 @@ Many apps push sensitive URLs into native code to dodge static analysis of the J
    MSYS_NO_PATHCONV=1 docker exec "$CONTAINER" \
      unzip -o /workspace/<apk> "lib/arm64-v8a/*.so" -d /workspace/native/<pkg>/
    ```
-   Then `mcp__ida-mcp__open_database` on the `.so`, and `mcp__ida-mcp__wait_for_analysis`.
+   Then `mcp__re-mcp__open_database` on the `.so`, and `mcp__re-mcp__wait_for_analysis`.
 3. Start an idasql HTTP server and query via curl (per project `CLAUDE.md`):
    ```bash
    MSYS_NO_PATHCONV=1 docker exec -d "$CONTAINER" \

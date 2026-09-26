@@ -149,7 +149,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN curl -LsSf https://hcli.docs.hex-rays.com/install | sh \
     && hcli ida accept-eula
 
-# ---------- Install uv + ida-mcp ----------
+# ---------- Install uv + re-mcp-ida ----------
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /workspace
